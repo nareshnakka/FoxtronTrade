@@ -1,0 +1,20 @@
+{
+  "generated_at": "2026-11-03T23:52:53.671004+05:30",
+  "range": {
+    "start": "2023-10-30",
+    "end": "2026-11-03"
+  },
+  "trading_days": 748,
+  "spot": {
+    "ok": 497,
+    "skip": 251,
+    "fail": 0
+  },
+  "fut_oi": {},
+  "options": {},
+  "spot_files": 748,
+  "fut_files": 40,
+  "opt_files": 5,
+  "index_token": 265,
+  "note": "Full 1y option chain history is not available on Kite for expired weeklies; FastTrack Sensex backtests use spot + synthetic ATM premium."
+}

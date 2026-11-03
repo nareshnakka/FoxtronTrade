@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "fii_long": 40000.0,
+  "fii_short": 280000.0,
+  "fii_net": -240000.0,
+  "dii_net": null,
+  "as_of": "2026-11-02",
+  "source": "manual",
+  "stale": false
+}

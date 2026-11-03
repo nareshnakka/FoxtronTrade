@@ -1,0 +1,267 @@
+[
+  {
+    "date": "2026-11-02",
+    "source": "sr_range_learn",
+    "samples": 2,
+    "changes": [
+      "prefer_sr_dip_entry",
+      "block_orb_chase_without_retest",
+      "block_orb_after_failed_break",
+      "session_end 15:15 for manage"
+    ],
+    "paper": {
+      "right": 2,
+      "wrong": 0,
+      "pnl": 19237
+    },
+    "insight": "Morning ORB CE chase lost; afternoon/midday CE after range support worked (+19.2k)."
+  },
+  {
+    "date": "2026-11-02",
+    "source": "train_profit_walk_forward",
+    "tag": "winners_only",
+    "samples": 206,
+    "changes": [
+      "prefer BREAKDOWN + CE crush setups",
+      "deny three_day_fall + pe_multi_day_crush"
+    ],
+    "insight": "Walk-forward both windows green on winners_only / bleeders gates."
+  },
+  {
+    "date": "2026-11-02",
+    "source": "rangebound_sr_reclaim_autopsy",
+    "samples": 4,
+    "changes": [
+      "sr_reclaim_max_under_support=12",
+      "reject CE reclaim deep under support especially with falling mom"
+    ],
+    "insight": "Oct 5/14 fake CE reclaim under support knifed; Oct 7/27 held at/near support."
+  },
+  {
+    "date": "2026-11-02",
+    "source": "retrain_oct_loss_autopsy",
+    "tag": "retrain_oct_loss_autopsy",
+    "samples": 4,
+    "loss_days": [
+      "2026-10-06",
+      "2026-10-09",
+      "2026-10-14",
+      "2026-10-23"
+    ],
+    "changes": [
+      "deny ce_multi_day_crush (keep ce_half_day_crush only)",
+      "orb_max_range_pts 110 (block spent OR like Oct 9 OR126)",
+      "breakout_max_extension_pts 25 \u00e2\u20ac\u201d wait S/R dip (Oct 6 late chase)",
+      "sr_reclaim_max_under_support 12 (Oct 14 scratch)"
+    ],
+    "before_30d_1l": {
+      "net": 107850,
+      "wl": [
+        7,
+        4
+      ]
+    },
+    "after_30d_1l": {
+      "net": 141907,
+      "wl": [
+        7,
+        0
+      ]
+    },
+    "insight": "All 4 loss modes skipped; 7/7 green traded days; +\u00e2\u201a\u00b91.42L on \u00e2\u201a\u00b91L (+142%)."
+  },
+  {
+    "date": "2026-11-02",
+    "source": "aug_untraded_improve",
+    "samples": 17,
+    "changes": [
+      "PE ORB rebreak when enable_sr_reject=false (was dead-end)",
+      "pe_rebreak_min_mom=25 to avoid soft knives",
+      "relax session-extreme on hard break",
+      "softer ce/pe vs_open on strong ORB (45/35)",
+      "breakout_max_extension 35"
+    ],
+    "aug_before": {
+      "net": 5696,
+      "traded": 4
+    },
+    "aug_after": {
+      "net": 8756,
+      "traded": 8
+    },
+    "oct30_after": {
+      "net": 142797,
+      "wl": [
+        10,
+        1
+      ]
+    },
+    "insight": "Aug 3/25 +200 late melt-ups after 15:00 stay skipped (no_entry_after). Mid-session DOWN PE now tradable."
+  },
+  {
+    "date": "2026-11-02",
+    "source": "train_feb_may_sep_bleed",
+    "tag": "crash_sr_pe_snapback_expiry_crush",
+    "samples": 3,
+    "loss_months": [
+      "2026-02",
+      "2026-05",
+      "2026-09"
+    ],
+    "changes": [
+      "sr_late_min_vs_open=35 after +210m (soft late CE SR)",
+      "sr_max_giveback_pts=160 dead-cat CE reclaim",
+      "pe_snapback_bounce block + pe_soft_no_entry_after 200 needs hard DOWN",
+      "pe_min_vs_open 55 / break 60; allow_orb_rebreak_hard_trend=false",
+      "post_decay confirm streak (survives warming); Tuesday=expiry",
+      "expiry post_decay min est 300%; fast confirm if est>=400% (Oct 13)"
+    ],
+    "before_10l_70": {
+      "feb": -95763,
+      "may": -49940,
+      "sep": -56061,
+      "oct30": 238558,
+      "year": 584276
+    },
+    "after_10l_70": {
+      "feb": 4433,
+      "may": -40517,
+      "sep": 5737,
+      "oct30": 223420,
+      "year": 338276
+    },
+    "insight": "Feb/Sep flipped green by cutting fake CE SR + soft/late PE + weak expiry crush. May still red (PE snapback month) but smaller. Oct 13 monster crush restored; year more selective (+33.8% vs +58%)."
+  },
+  {
+    "date": "2026-11-02",
+    "source": "train_may_jun_bleed",
+    "tag": "pe_snapback_ce_fake_break",
+    "loss_months": [
+      "2026-05",
+      "2026-06"
+    ],
+    "changes": [
+      "relax_extreme_pe_on_hard_break=false (PE must stay at day low)",
+      "pe_spent_day_ext + off-low block; pe_breakdown_min_mom=32",
+      "sr_soft_vs_open=25 needs mom>=18; sr_late_min_vs=45",
+      "ce_min_vs_open_break=70; breakout_max_extension=25; block falling-mom CE breakout"
+    ],
+    "before_10l_70": {
+      "may": -40517,
+      "jun": -29488,
+      "feb": 4433,
+      "year": 338276
+    },
+    "after_10l_70": {
+      "may": -9933,
+      "jun": -3190,
+      "feb": 27236,
+      "oct30": 223420,
+      "year": 391752
+    },
+    "insight": "May PE knives cut via day-low + mom; June fake CE cut via break/SR quality. Year +39.2%."
+  },
+  {
+    "date": "2026-11-03",
+    "source": "train_range_bound_sharp_fall",
+    "tag": "range_bound_sharp_fall",
+    "samples": {
+      "range_bound": 93,
+      "sharp_fall": 47
+    },
+    "changes": [
+      "block_structure_in_chop (no CE SR/break in chop; PE hard breakdown only)",
+      "block_ce_on_sharp_fall + fail-rally giveback >=80",
+      "CE breakout path/day efficiency floors; soft_vs_open off; ce_min 65/70",
+      "block_late_sr_in_range after +180m if day_eff < 0.35"
+    ],
+    "before": {
+      "range_net": 81506,
+      "sharp_net": -19130,
+      "year_10l70": 391752
+    },
+    "after": {
+      "range_net": 49830,
+      "sharp_net": -3847,
+      "oct30": 184510,
+      "year_10l70": 404678
+    },
+    "insight": "Primary train on range-bound (stay flatter, skip fake CE) and sharp-fall (no CE into dump; PE only clean). Sharp bleed \u221219k\u2192\u22123.8k; year +40.5%."
+  },
+  {
+    "date": "2026-11-03",
+    "source": "profit_learn_flat_loss_1yr",
+    "tag": "profit_learn_flat_loss_1yr",
+    "samples": 228,
+    "before_1yr_10l_d100": {
+      "net": 404678,
+      "wl": [
+        24,
+        19
+      ]
+    },
+    "after_1yr_10l_d100": {
+      "net": 475525,
+      "wl": [
+        24,
+        11
+      ]
+    },
+    "after_30d_10l_d100": {
+      "net": 188299,
+      "wl": [
+        5,
+        0
+      ]
+    },
+    "flat_insight": "185 flat mostly chop/wait-structure \u2014 correct non-trades. Missed UP/DOWN days stay skipped unless clean structure (do not reopen chop).",
+    "loss_insight": "19 losses were CE SR fake reclaim (-69k) + CE breakout fail (-66k) + PE snap (1) + post_decay knife. Cut late/soft SR, weak-mom breakouts, morning spent-OR SR.",
+    "changes": [
+      "ce_breakout_min_mom=18; ce_min_vs_open_break=85; path_eff 0.35",
+      "sr late_hard after 240m need above-support+15 and mom>=20",
+      "sr soft-session under-support <-5 blocked; giveback max 100",
+      "sr persist fast only mid-vs or hard+mom; else 2 bars",
+      "sr spent OR>=100 before +150m needs mom>=25 (Oct27)",
+      "pe snapback 10pts/3m; session cut 300m (block Nov2 14:45 path)"
+    ],
+    "insight": "1yr +47.5% (+70k vs prior). Oct 5W/0L +1.88L. Kept Apr2/Jul24/Oct13/15/28/Nov2."
+  },
+  {
+    "date": "2026-11-03",
+    "source": "expiry_gamma_autopsy",
+    "tag": "expiry_wait_decay_gamma",
+    "samples": 29,
+    "insight": "Expiry ATM: wait decay floor ~11:30 then direction (24W/5L +7.3% avg). Early OR-break negative. Fast exit +10%/20m.",
+    "changes": [
+      "expiry_min_entry_minutes=120",
+      "expiry_no_entry_after_minutes=195",
+      "expiry_min_mom=25",
+      "expiry_time_stop_minutes=20"
+    ],
+    "after_30d_10l": {
+      "net": 193440,
+      "wl": [
+        6,
+        0
+      ]
+    }
+  },
+  {
+    "date": "2026-11-03",
+    "samples": 27,
+    "changes": [
+      "min_confidence 0.55 \u2192 0.58 (WR 41% weak)",
+      "weight macro_risk_off 0.92 \u2192 0.84 (tag WR 39%)"
+    ],
+    "paper": {
+      "right": 11,
+      "wrong": 16,
+      "pnl": -14749.02
+    },
+    "live": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    }
+  }
+]

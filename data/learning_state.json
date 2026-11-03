@@ -1,0 +1,72 @@
+{
+  "updated_at": "2026-11-03T16:32:40.376252+05:30",
+  "last_daily_learn": "2026-11-03",
+  "prior_pe": 0.45,
+  "algo1_min_confidence": 0.58,
+  "signal_weights": {
+    "bearish_candle": 1.0,
+    "bullish_candle": 1.0,
+    "rsi_high": 1.0,
+    "rsi_low": 1.0,
+    "ema_bear": 0.5,
+    "ema_bull": 1.0,
+    "near_resistance": 1.0,
+    "near_support": 1.0,
+    "macro_risk_off": 0.84,
+    "macro_risk_on": 1.0,
+    "pe_firming": 1.0,
+    "ce_firming": 1.0,
+    "ce_trap_filter": 1.0,
+    "or_fade_high": 1.0,
+    "or_expect_recover": 1.0,
+    "or_breakdown": 1.0
+  },
+  "stats": {
+    "paper": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    },
+    "live": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    }
+  },
+  "notes": [
+    "2026-10-26: need more samples",
+    "2026-10-27: WR 50% samples 14; prior_pe 0.65 \u2192 0.52 (PE WR 30% / CE WR 100%); weight ema_bear 1.00 \u2192 0.92 (tag WR 0%)",
+    "2026-10-28: WR 48% samples 21; prior_pe 0.52 \u2192 0.48 (PE WR 40% / CE WR 67%); weight ema_bear 0.92 \u2192 0.84 (tag WR 0%)",
+    "2026-10-29: WR 50% samples 22; prior_pe 0.48 \u2192 0.45 (PE WR 40% / CE WR 71%); weight ema_bear 0.84 \u2192 0.76 (tag WR 0%)",
+    "2026-10-30: WR 50% samples 22; weight ema_bear 0.76 \u2192 0.68 (tag WR 0%)",
+    "2026-10-31: WR 46% samples 24; weight ema_bear 0.68 \u2192 0.60 (tag WR 0%)",
+    "2026-11-01: WR 46% samples 24; weight ema_bear 0.60 \u2192 0.52 (tag WR 0%)",
+    "2026-11-02: WR 44% samples 25; min_confidence 0.52 \u2192 0.55 (WR 44% weak); weight ema_bear 0.52 \u2192 0.50 (tag WR 0%); weight macro_risk_off 1.00 \u2192 0.92 (tag WR 39%)",
+    "2026-11-02: UP-day PE post-decay \u2192 spot_align + day-extent rule (block PE while still above open after UP swing)",
+    "2026-11-02 S/R learn: block ORB chase/failed-break; prefer CE on UP-range dip-reclaim \u2192 +9.6%",
+    "2026-11-03: WR 41% samples 27; min_confidence 0.55 \u2192 0.58 (WR 41% weak); weight macro_risk_off 0.92 \u2192 0.84 (tag WR 39%)",
+    "2026-10-26: weak-est (+75%) CE post-decay partial reclaim (-14 vs open) stabbed -35k in 1m. Block shallow under-open reclaim when est<200; weak-est confirm 5m; true spot OHLC for decay."
+  ],
+  "rules": {
+    "post_decay_spot_align": {
+      "enabled": true,
+      "pts": 35.0,
+      "learned_from": "2026-11-02",
+      "rule": "Block PE if vs_open>=pts OR (day_up_extent>=pts and vs_open>0); CE mirror"
+    },
+    "sr_range_entry": {
+      "enabled": true,
+      "learned_from": "2026-11-02",
+      "rule": "Block ORB high-chase & re-chase after failed break; buy CE on UP-day support reclaim / PE on DOWN-day reject"
+    },
+    "post_decay_weak_est_partial_reclaim": {
+      "enabled": true,
+      "strong_est_pct": 200.0,
+      "align_pts": 35.0,
+      "weak_confirm_minutes": 5,
+      "ce_max_under_open": 150.0,
+      "learned_from": "2026-10-26",
+      "rule": "WAIT CE post-decay if est<strong and 0>vs_open>-align (dead-cat); fix spot_open to session open"
+    }
+  }
+}

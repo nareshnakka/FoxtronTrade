@@ -1,0 +1,505 @@
+{
+  "best_name": "pd_sr_early_gamma",
+  "score": 42984.32,
+  "train": {
+    "sessions": 138,
+    "traded": 39,
+    "setups": 39,
+    "wins": 22,
+    "losses": 17,
+    "net": 28362.21,
+    "final": 128362.21,
+    "max_dd": 21187.6,
+    "green": 22,
+    "red": 17
+  },
+  "train_expiry": {
+    "sessions": 45,
+    "traded": 12,
+    "setups": 12,
+    "wins": 7,
+    "losses": 5,
+    "net": 31516.67,
+    "final": 131516.67,
+    "max_dd": 11235.72,
+    "green": 7,
+    "red": 5
+  },
+  "test": {
+    "sessions": 12,
+    "traded": 4,
+    "setups": 4,
+    "wins": 3,
+    "losses": 1,
+    "net": 10125.47,
+    "final": 110125.47,
+    "max_dd": 5267.09,
+    "green": 3,
+    "red": 1
+  },
+  "train_wr": 0.564,
+  "test_wr": 0.75,
+  "full": {
+    "sessions": 150,
+    "traded": 43,
+    "setups": 43,
+    "wins": 25,
+    "losses": 18,
+    "net": 38487.68,
+    "final": 138487.68,
+    "max_dd": 21187.6,
+    "green": 25,
+    "red": 18
+  },
+  "full_wr": 0.581,
+  "calendar": {
+    "sensex_expiry_weekday": 1,
+    "sensex_trade_weekdays": [
+      1,
+      2
+    ],
+    "sensex_conditional_weekdays": [
+      3
+    ],
+    "sensex_thursday_gamma_enabled": true,
+    "sensex_thursday_gamma_only": true,
+    "sensex_gamma_detect_enabled": true,
+    "sensex_block_pre_expiry": true,
+    "sensex_pre_expiry_weekday": 0,
+    "sensex_expiry_orb_gamma": true,
+    "sensex_expiry_min_break_strength": 0.22,
+    "sensex_expiry_require_orb_retest": true,
+    "sensex_expiry_block_failed_orb": true,
+    "sensex_expiry_gamma_min_entry_minutes": 45,
+    "sensex_expiry_gamma_no_entry_after": 210,
+    "sensex_expiry_gamma_min_mom": 45
+  },
+  "test_range": {
+    "start": "2026-10-06",
+    "end": "2026-11-03"
+  },
+  "candidates": [
+    {
+      "name": "ultra_sr_1td",
+      "score": 42984.32,
+      "train": {
+        "sessions": 138,
+        "traded": 34,
+        "setups": 34,
+        "wins": 18,
+        "losses": 16,
+        "net": 30701.42,
+        "final": 130701.42,
+        "max_dd": 29969.57,
+        "green": 18,
+        "red": 16
+      },
+      "train_expiry": {
+        "sessions": 45,
+        "traded": 12,
+        "setups": 12,
+        "wins": 7,
+        "losses": 5,
+        "net": 31516.67,
+        "final": 131516.67,
+        "max_dd": 11235.72,
+        "green": 7,
+        "red": 5
+      },
+      "test": {
+        "sessions": 12,
+        "traded": 1,
+        "setups": 1,
+        "wins": 1,
+        "losses": 0,
+        "net": 5248.02,
+        "final": 105248.02,
+        "max_dd": 0.0,
+        "green": 1,
+        "red": 0
+      },
+      "train_wr": 0.529,
+      "test_wr": 1.0
+    },
+    {
+      "name": "orb_always_sr",
+      "score": 40911.68,
+      "train": {
+        "sessions": 138,
+        "traded": 40,
+        "setups": 40,
+        "wins": 19,
+        "losses": 21,
+        "net": 34758.47,
+        "final": 134758.47,
+        "max_dd": 31886.9,
+        "green": 19,
+        "red": 21
+      },
+      "train_expiry": {
+        "sessions": 45,
+        "traded": 12,
+        "setups": 12,
+        "wins": 7,
+        "losses": 5,
+        "net": 23172.49,
+        "final": 123172.49,
+        "max_dd": 12572.75,
+        "green": 7,
+        "red": 5
+      },
+      "test": {
+        "sessions": 12,
+        "traded": 1,
+        "setups": 1,
+        "wins": 1,
+        "losses": 0,
+        "net": 5248.02,
+        "final": 105248.02,
+        "max_dd": 0.0,
+        "green": 1,
+        "red": 0
+      },
+      "train_wr": 0.475,
+      "test_wr": 1.0
+    },
+    {
+      "name": "pd_sr_early_gamma",
+      "score": 36958.46,
+      "train": {
+        "sessions": 138,
+        "traded": 39,
+        "setups": 39,
+        "wins": 22,
+        "losses": 17,
+        "net": 28362.21,
+        "final": 128362.21,
+        "max_dd": 21187.6,
+        "green": 22,
+        "red": 17
+      },
+      "train_expiry": {
+        "sessions": 45,
+        "traded": 16,
+        "setups": 16,
+        "wins": 10,
+        "losses": 6,
+        "net": 18908.78,
+        "final": 118908.78,
+        "max_dd": 18480.38,
+        "green": 10,
+        "red": 6
+      },
+      "test": {
+        "sessions": 12,
+        "traded": 4,
+        "setups": 4,
+        "wins": 3,
+        "losses": 1,
+        "net": 10125.47,
+        "final": 110125.47,
+        "max_dd": 5267.09,
+        "green": 3,
+        "red": 1
+      },
+      "train_wr": 0.564,
+      "test_wr": 0.75
+    },
+    {
+      "name": "exp_orb_retest_sr",
+      "score": 34106.05,
+      "train": {
+        "sessions": 138,
+        "traded": 38,
+        "setups": 38,
+        "wins": 20,
+        "losses": 18,
+        "net": 26272.24,
+        "final": 126272.24,
+        "max_dd": 24629.65,
+        "green": 20,
+        "red": 18
+      },
+      "train_expiry": {
+        "sessions": 45,
+        "traded": 14,
+        "setups": 14,
+        "wins": 8,
+        "losses": 6,
+        "net": 20976.51,
+        "final": 120976.51,
+        "max_dd": 20368.25,
+        "green": 8,
+        "red": 6
+      },
+      "test": {
+        "sessions": 12,
+        "traded": 1,
+        "setups": 1,
+        "wins": 1,
+        "losses": 0,
+        "net": 5248.02,
+        "final": 105248.02,
+        "max_dd": 0.0,
+        "green": 1,
+        "red": 0
+      },
+      "train_wr": 0.526,
+      "test_wr": 1.0
+    },
+    {
+      "name": "current_overrides",
+      "score": 22871.87,
+      "train": {
+        "sessions": 138,
+        "traded": 20,
+        "setups": 20,
+        "wins": 8,
+        "losses": 12,
+        "net": 15964.87,
+        "final": 115964.87,
+        "max_dd": 21396.64,
+        "green": 8,
+        "red": 12
+      },
+      "train_expiry": {
+        "sessions": 45,
+        "traded": 7,
+        "setups": 7,
+        "wins": 3,
+        "losses": 4,
+        "net": 23432.99,
+        "final": 123432.99,
+        "max_dd": 11235.72,
+        "green": 3,
+        "red": 4
+      },
+      "test": {
+        "sessions": 12,
+        "traded": 1,
+        "setups": 1,
+        "wins": 1,
+        "losses": 0,
+        "net": 5248.02,
+        "final": 105248.02,
+        "max_dd": 0.0,
+        "green": 1,
+        "red": 0
+      },
+      "train_wr": 0.4,
+      "test_wr": 1.0
+    },
+    {
+      "name": "pd_sr",
+      "score": 16147.18,
+      "train": {
+        "sessions": 138,
+        "traded": 19,
+        "setups": 19,
+        "wins": 8,
+        "losses": 11,
+        "net": 13005.5,
+        "final": 113005.5,
+        "max_dd": 21484.85,
+        "green": 8,
+        "red": 11
+      },
+      "train_expiry": {
+        "sessions": 45,
+        "traded": 7,
+        "setups": 7,
+        "wins": 3,
+        "losses": 4,
+        "net": 15088.81,
+        "final": 115088.81,
+        "max_dd": 11235.72,
+        "green": 3,
+        "red": 4
+      },
+      "test": {
+        "sessions": 12,
+        "traded": 1,
+        "setups": 1,
+        "wins": 1,
+        "losses": 0,
+        "net": 5248.02,
+        "final": 105248.02,
+        "max_dd": 0.0,
+        "green": 1,
+        "red": 0
+      },
+      "train_wr": 0.421,
+      "test_wr": 1.0
+    },
+    {
+      "name": "exp_orb_chase_sr",
+      "score": -12071.71,
+      "train": {
+        "sessions": 138,
+        "traded": 52,
+        "setups": 58,
+        "wins": 26,
+        "losses": 32,
+        "net": 4954.28,
+        "final": 104954.28,
+        "max_dd": 57036.46,
+        "green": 20,
+        "red": 32
+      },
+      "train_expiry": {
+        "sessions": 45,
+        "traded": 23,
+        "setups": 27,
+        "wins": 12,
+        "losses": 15,
+        "net": -9661.04,
+        "final": 90338.96,
+        "max_dd": 48383.4,
+        "green": 8,
+        "red": 15
+      },
+      "test": {
+        "sessions": 12,
+        "traded": 6,
+        "setups": 8,
+        "wins": 3,
+        "losses": 5,
+        "net": -7306.45,
+        "final": 92693.55,
+        "max_dd": 24206.47,
+        "green": 2,
+        "red": 4
+      },
+      "train_wr": 0.448,
+      "test_wr": 0.375
+    },
+    {
+      "name": "sr_loose_cov",
+      "score": -14891.27,
+      "train": {
+        "sessions": 138,
+        "traded": 46,
+        "setups": 55,
+        "wins": 24,
+        "losses": 31,
+        "net": -6089.73,
+        "final": 93910.27,
+        "max_dd": 35201.54,
+        "green": 17,
+        "red": 29
+      },
+      "train_expiry": {
+        "sessions": 45,
+        "traded": 19,
+        "setups": 21,
+        "wins": 9,
+        "losses": 12,
+        "net": 697.39,
+        "final": 100697.39,
+        "max_dd": 37287.38,
+        "green": 7,
+        "red": 12
+      },
+      "test": {
+        "sessions": 12,
+        "traded": 4,
+        "setups": 6,
+        "wins": 4,
+        "losses": 2,
+        "net": 6930.45,
+        "final": 106930.45,
+        "max_dd": 4105.92,
+        "green": 3,
+        "red": 1
+      },
+      "train_wr": 0.436,
+      "test_wr": 0.667
+    },
+    {
+      "name": "exp_orb_retest_s32",
+      "score": -44621.89,
+      "train": {
+        "sessions": 138,
+        "traded": 38,
+        "setups": 38,
+        "wins": 16,
+        "losses": 22,
+        "net": -27027.52,
+        "final": 72972.48,
+        "max_dd": 27027.52,
+        "green": 16,
+        "red": 22
+      },
+      "train_expiry": {
+        "sessions": 45,
+        "traded": 14,
+        "setups": 14,
+        "wins": 5,
+        "losses": 9,
+        "net": -22360.48,
+        "final": 77639.52,
+        "max_dd": 26559.82,
+        "green": 5,
+        "red": 9
+      },
+      "test": {
+        "sessions": 12,
+        "traded": 1,
+        "setups": 1,
+        "wins": 1,
+        "losses": 0,
+        "net": 5248.02,
+        "final": 105248.02,
+        "max_dd": 0.0,
+        "green": 1,
+        "red": 0
+      },
+      "train_wr": 0.421,
+      "test_wr": 1.0
+    },
+    {
+      "name": "pd_sr_micro",
+      "score": -53958.72,
+      "train": {
+        "sessions": 138,
+        "traded": 26,
+        "setups": 31,
+        "wins": 11,
+        "losses": 20,
+        "net": -36967.34,
+        "final": 63032.66,
+        "max_dd": 44532.66,
+        "green": 6,
+        "red": 20
+      },
+      "train_expiry": {
+        "sessions": 45,
+        "traded": 10,
+        "setups": 12,
+        "wins": 4,
+        "losses": 8,
+        "net": -10982.96,
+        "final": 89017.04,
+        "max_dd": 31160.59,
+        "green": 2,
+        "red": 8
+      },
+      "test": {
+        "sessions": 12,
+        "traded": 3,
+        "setups": 5,
+        "wins": 3,
+        "losses": 2,
+        "net": 5842.35,
+        "final": 105842.35,
+        "max_dd": 4105.92,
+        "green": 2,
+        "red": 1
+      },
+      "train_wr": 0.355,
+      "test_wr": 0.6
+    }
+  ],
+  "lesson": "Profit-max on Tue/Wed+Thu\u03b3; train before last 30d, test = last month OOS. Expiry ORB via overlay+retest.",
+  "selection": "max_last_month_test_among_train_profit"
+}

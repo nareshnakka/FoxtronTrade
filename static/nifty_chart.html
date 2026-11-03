@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nifty 50 — Live Candle Chart</title>
+  <script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --text: #e7ecf3;
+      --muted: #8b9bb4;
+      --accent: #3d9cf0;
+      --up: #26a69a;
+      --down: #ef5350;
+      --border: #2a3548;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px 20px;
+      padding: 12px 16px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    .price {
+      font-variant-numeric: tabular-nums;
+      font-size: 1.25rem;
+      font-weight: 700;
+    }
+    .price.up { color: var(--up); }
+    .price.down { color: var(--down); }
+    .meta { color: var(--muted); font-size: 0.85rem; }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; align-items: center; }
+    button, select {
+      background: #243044;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    button:hover, select:hover { border-color: var(--accent); }
+    button.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    #chart {
+      flex: 1;
+      min-height: 0;
+      width: 100%;
+    }
+    .hint {
+      padding: 6px 16px;
+      font-size: 0.75rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      background: var(--panel);
+    }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      display: inline-block; margin-right: 6px;
+      background: var(--muted);
+    }
+    .status-dot.live { background: var(--up); box-shadow: 0 0 6px var(--up); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>NIFTY 50</h1>
+    <div>
+      <span id="ltp" class="price">—</span>
+      <span id="chg" class="meta"></span>
+    </div>
+    <div class="meta">
+      <span class="status-dot" id="dot"></span>
+      <span id="status">loading…</span>
+      · O <span id="o">—</span>
+      H <span id="h">—</span>
+      L <span id="l">—</span>
+      C <span id="c">—</span>
+    </div>
+    <div class="controls">
+      <button data-i="minute" class="tf">1m</button>
+      <button data-i="3minute" class="tf">3m</button>
+      <button data-i="5minute" class="tf active">5m</button>
+      <button data-i="15minute" class="tf">15m</button>
+      <button data-i="60minute" class="tf">1h</button>
+      <button data-i="day" class="tf">1D</button>
+      <select id="days">
+        <option value="5">5 days</option>
+        <option value="15" selected>15 days</option>
+        <option value="30">30 days</option>
+        <option value="60">60 days</option>
+        <option value="120">120 days</option>
+        <option value="365">1 year</option>
+      </select>
+      <button id="reload">Reload</button>
+    </div>
+  </header>
+  <div id="chart"></div>
+  <div class="hint">
+    Scroll to zoom · drag to pan history · double-click to reset.
+    Live LTP refreshes every 3s (market hours). Data via Zerodha Kite.
+  </div>
+
+  <script>
+    const IST_TZ = "Asia/Kolkata";
+    function istDate(time) {
+      if (time && typeof time === "object" && "year" in time) {
+        return new Date(Date.UTC(time.year, time.month - 1, time.day));
+      }
+      return new Date(Number(time) * 1000);
+    }
+    function formatIstTick(time, tickMarkType) {
+      const d = istDate(time);
+      const tz = { timeZone: IST_TZ };
+      const T = LightweightCharts.TickMarkType;
+      if (tickMarkType === T.Year) {
+        return d.toLocaleDateString("en-IN", { ...tz, year: "numeric" });
+      }
+      if (tickMarkType === T.Month) {
+        return d.toLocaleDateString("en-IN", { ...tz, month: "short", year: "2-digit" });
+      }
+      if (tickMarkType === T.DayOfMonth) {
+        return d.toLocaleDateString("en-IN", { ...tz, day: "numeric", month: "short" });
+      }
+      return d.toLocaleTimeString("en-IN", {
+        ...tz, hour: "2-digit", minute: "2-digit", hour12: false,
+      });
+    }
+    function formatIstCrosshair(time) {
+      return istDate(time).toLocaleString("en-IN", {
+        timeZone: IST_TZ,
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }) + " IST";
+    }
+
+    const chartEl = document.getElementById("chart");
+    const chart = LightweightCharts.createChart(chartEl, {
+      layout: {
+        background: { type: "solid", color: "#0f1419" },
+        textColor: "#8b9bb4",
+      },
+      grid: {
+        vertLines: { color: "#1e2836" },
+        horzLines: { color: "#1e2836" },
+      },
+      crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+      rightPriceScale: { borderColor: "#2a3548" },
+      localization: {
+        locale: "en-IN",
+        timeFormatter: formatIstCrosshair,
+      },
+      timeScale: {
+        borderColor: "#2a3548",
+        timeVisible: true,
+        secondsVisible: false,
+        rightOffset: 8,
+        tickMarkFormatter: formatIstTick,
+      },
+    });
+
+    const series = chart.addCandlestickSeries({
+      upColor: "#26a69a",
+      downColor: "#ef5350",
+      borderUpColor: "#26a69a",
+      borderDownColor: "#ef5350",
+      wickUpColor: "#26a69a",
+      wickDownColor: "#ef5350",
+    });
+
+    let interval = "5minute";
+    let lastClose = null;
+
+    function resize() {
+      chart.applyOptions({
+        width: chartEl.clientWidth,
+        height: chartEl.clientHeight,
+      });
+    }
+    window.addEventListener("resize", resize);
+    resize();
+
+    async function loadCandles() {
+      const days = document.getElementById("days").value;
+      document.getElementById("status").textContent = "fetching history…";
+      const res = await fetch(`/api/candles?interval=${encodeURIComponent(interval)}&days=${days}`);
+      const data = await res.json();
+      if (!res.ok) {
+        document.getElementById("status").textContent = data.error || "failed";
+        return;
+      }
+      series.setData(data.candles);
+      chart.timeScale().fitContent();
+      document.getElementById("status").textContent =
+        `${data.candles.length} candles · ${interval} · to ${data.to}`;
+      if (data.candles.length) {
+        lastClose = data.candles[data.candles.length - 1].close;
+      }
+    }
+
+    async function loadQuote() {
+      try {
+        const res = await fetch("/api/quote");
+        const q = await res.json();
+        if (!res.ok) return;
+        const ltpEl = document.getElementById("ltp");
+        ltpEl.textContent = Number(q.last_price).toLocaleString("en-IN", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        });
+        const prev = q.ohlc && q.ohlc.close;
+        if (prev) {
+          const chg = q.last_price - prev;
+          const pct = (chg / prev) * 100;
+          const up = chg >= 0;
+          ltpEl.className = "price " + (up ? "up" : "down");
+          document.getElementById("chg").textContent =
+            `${up ? "+" : ""}${chg.toFixed(2)} (${up ? "+" : ""}${pct.toFixed(2)}%)`;
+        }
+        if (q.ohlc) {
+          document.getElementById("o").textContent = q.ohlc.open?.toFixed?.(2) ?? q.ohlc.open;
+          document.getElementById("h").textContent = q.ohlc.high?.toFixed?.(2) ?? q.ohlc.high;
+          document.getElementById("l").textContent = q.ohlc.low?.toFixed?.(2) ?? q.ohlc.low;
+          document.getElementById("c").textContent = q.ohlc.close?.toFixed?.(2) ?? q.ohlc.close;
+        }
+        const dot = document.getElementById("dot");
+        dot.className = "status-dot" + (q.market_open ? " live" : "");
+        if (lastClose != null && interval !== "day") {
+          // update forming candle tip with live LTP when possible
+          // (full candle rebuild still via Reload / interval change)
+        }
+      } catch (_) { /* ignore transient */ }
+    }
+
+    document.querySelectorAll("button.tf").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("button.tf").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        interval = btn.dataset.i;
+        loadCandles();
+      });
+    });
+    document.getElementById("days").addEventListener("change", loadCandles);
+    document.getElementById("reload").addEventListener("click", () => {
+      loadCandles();
+      loadQuote();
+    });
+
+    loadCandles();
+    loadQuote();
+    setInterval(loadQuote, 3000);
+    setInterval(loadCandles, 60_000);
+  </script>
+</body>
+</html>

@@ -1,0 +1,18 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+access_token.json
+*.log
+.DS_Store
+data/trades.json
+data/expiries/
+data/sensex/minutes/
+data/sensex/fut_oi/
+data/sensex/options/
+data/backtests/
+# keep training_log / learning_state locally (optional commit)
+# data/training_log.jsonl
+# data/learning_state.json

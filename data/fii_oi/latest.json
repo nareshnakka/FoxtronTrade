@@ -1,0 +1,38 @@
+{
+  "ts": "2026-11-04T00:09:03.947896+05:30",
+  "day": "2026-11-04",
+  "symbol": "NIFTY26NOVFUT",
+  "ltp": 23780.0,
+  "prev_close": 23407.4,
+  "oi": 14450670,
+  "day_open_px": 23780.0,
+  "day_open_oi": 14450670,
+  "price_chg_vs_snapshot": 0.0,
+  "oi_chg_vs_snapshot": 0,
+  "price_chg_vs_day_open": 0.0,
+  "oi_chg_vs_day_open": 0,
+  "price_chg_vs_prev_close": 372.6,
+  "regime": "chop",
+  "short_buildup_since": null,
+  "smart_money": "balanced",
+  "fii_net": -240000.0,
+  "fii_long": 40000.0,
+  "fii_short": 280000.0,
+  "fii_net_chg": 0.0,
+  "participant_ok": true,
+  "participant_source": "cache_stale",
+  "participant_error": null,
+  "quote_error": null,
+  "actions": {
+    "block_ce": false,
+    "prefer_pe": false,
+    "prefer_ce": false,
+    "caution_ce": false,
+    "confidence_adj": 0.0,
+    "notes": [
+      "FII deep net short (-240,000)"
+    ],
+    "side_hint": null
+  },
+  "saved": true
+}

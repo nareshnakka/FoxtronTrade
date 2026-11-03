@@ -1,0 +1,303 @@
+{
+  "best_name": "gamma_pd_sr",
+  "score": 27410.97,
+  "hold": {
+    "sessions": 31,
+    "traded": 5,
+    "setups": 5,
+    "wins": 3,
+    "losses": 2,
+    "net": 19974.97,
+    "final": 119974.97,
+    "max_dd": 5838.28,
+    "green": 3,
+    "red": 2
+  },
+  "hold_wr": 0.6,
+  "full": {
+    "sessions": 101,
+    "traded": 17,
+    "setups": 17,
+    "wins": 9,
+    "losses": 8,
+    "net": 45062.74,
+    "final": 145062.74,
+    "max_dd": 33201.16,
+    "green": 9,
+    "red": 8
+  },
+  "full_wr": 0.529,
+  "calendar": {
+    "sensex_expiry_weekday": 1,
+    "sensex_trade_weekdays": [
+      1,
+      2
+    ],
+    "sensex_block_pre_expiry": true,
+    "sensex_pre_expiry_weekday": 0
+  },
+  "candidates": [
+    {
+      "name": "gamma_pd_sr",
+      "score": 27410.97,
+      "train": {
+        "sessions": 70,
+        "traded": 12,
+        "setups": 12,
+        "wins": 6,
+        "losses": 6,
+        "net": 25087.77,
+        "final": 125087.77,
+        "max_dd": 33201.16,
+        "green": 6,
+        "red": 6
+      },
+      "hold": {
+        "sessions": 31,
+        "traded": 5,
+        "setups": 5,
+        "wins": 3,
+        "losses": 2,
+        "net": 19974.97,
+        "final": 119974.97,
+        "max_dd": 5838.28,
+        "green": 3,
+        "red": 2
+      },
+      "hold_wr": 0.6
+    },
+    {
+      "name": "gamma_sr_ce_orb",
+      "score": 26085.53,
+      "train": {
+        "sessions": 70,
+        "traded": 20,
+        "setups": 20,
+        "wins": 10,
+        "losses": 10,
+        "net": 108385.54,
+        "final": 208385.54,
+        "max_dd": 33201.16,
+        "green": 10,
+        "red": 10
+      },
+      "hold": {
+        "sessions": 31,
+        "traded": 9,
+        "setups": 9,
+        "wins": 3,
+        "losses": 6,
+        "net": -5018.82,
+        "final": 94981.18,
+        "max_dd": 13144.95,
+        "green": 3,
+        "red": 6
+      },
+      "hold_wr": 0.333
+    },
+    {
+      "name": "gamma_orb_tight",
+      "score": 15476.43,
+      "train": {
+        "sessions": 70,
+        "traded": 12,
+        "setups": 12,
+        "wins": 5,
+        "losses": 7,
+        "net": 13866.06,
+        "final": 113866.06,
+        "max_dd": 33733.02,
+        "green": 5,
+        "red": 7
+      },
+      "hold": {
+        "sessions": 31,
+        "traded": 7,
+        "setups": 7,
+        "wins": 4,
+        "losses": 3,
+        "net": 13496.52,
+        "final": 113496.52,
+        "max_dd": 10618.6,
+        "green": 4,
+        "red": 3
+      },
+      "hold_wr": 0.571
+    },
+    {
+      "name": "gamma_sr_micro_orb",
+      "score": 1400.95,
+      "train": {
+        "sessions": 70,
+        "traded": 26,
+        "setups": 34,
+        "wins": 13,
+        "losses": 21,
+        "net": 38006.1,
+        "final": 138006.1,
+        "max_dd": 44362.77,
+        "green": 9,
+        "red": 17
+      },
+      "hold": {
+        "sessions": 31,
+        "traded": 10,
+        "setups": 13,
+        "wins": 6,
+        "losses": 7,
+        "net": -7076.66,
+        "final": 92923.34,
+        "max_dd": 12230.46,
+        "green": 5,
+        "red": 5
+      },
+      "hold_wr": 0.462
+    },
+    {
+      "name": "sr_plus_micro_cal",
+      "score": -164.68,
+      "train": {
+        "sessions": 70,
+        "traded": 12,
+        "setups": 14,
+        "wins": 6,
+        "losses": 8,
+        "net": 3954.52,
+        "final": 103954.52,
+        "max_dd": 24730.02,
+        "green": 4,
+        "red": 8
+      },
+      "hold": {
+        "sessions": 31,
+        "traded": 6,
+        "setups": 6,
+        "wins": 4,
+        "losses": 2,
+        "net": -1018.88,
+        "final": 98981.12,
+        "max_dd": 5321.01,
+        "green": 4,
+        "red": 2
+      },
+      "hold_wr": 0.667
+    },
+    {
+      "name": "gamma_orb_sr_pd",
+      "score": -3593.6,
+      "train": {
+        "sessions": 70,
+        "traded": 28,
+        "setups": 31,
+        "wins": 9,
+        "losses": 22,
+        "net": -15866.64,
+        "final": 84133.36,
+        "max_dd": 56899.85,
+        "green": 7,
+        "red": 21
+      },
+      "hold": {
+        "sessions": 31,
+        "traded": 10,
+        "setups": 13,
+        "wins": 7,
+        "losses": 6,
+        "net": 11927.98,
+        "final": 111927.98,
+        "max_dd": 10565.23,
+        "green": 6,
+        "red": 4
+      },
+      "hold_wr": 0.538
+    },
+    {
+      "name": "gamma_mom_blast",
+      "score": -12863.43,
+      "train": {
+        "sessions": 70,
+        "traded": 36,
+        "setups": 48,
+        "wins": 18,
+        "losses": 30,
+        "net": 187.61,
+        "final": 100187.61,
+        "max_dd": 39246.92,
+        "green": 12,
+        "red": 24
+      },
+      "hold": {
+        "sessions": 31,
+        "traded": 13,
+        "setups": 17,
+        "wins": 6,
+        "losses": 11,
+        "net": -2444.29,
+        "final": 97555.71,
+        "max_dd": 19374.29,
+        "green": 4,
+        "red": 9
+      },
+      "hold_wr": 0.353
+    },
+    {
+      "name": "gamma_selective_1td",
+      "score": -20297.5,
+      "train": {
+        "sessions": 70,
+        "traded": 20,
+        "setups": 20,
+        "wins": 8,
+        "losses": 12,
+        "net": -23151.57,
+        "final": 76848.43,
+        "max_dd": 53828.58,
+        "green": 8,
+        "red": 12
+      },
+      "hold": {
+        "sessions": 31,
+        "traded": 6,
+        "setups": 6,
+        "wins": 2,
+        "losses": 4,
+        "net": 3876.15,
+        "final": 103876.15,
+        "max_dd": 12687.12,
+        "green": 2,
+        "red": 4
+      },
+      "hold_wr": 0.333
+    },
+    {
+      "name": "gamma_orb_sr_s32",
+      "score": -25834.55,
+      "train": {
+        "sessions": 70,
+        "traded": 29,
+        "setups": 35,
+        "wins": 14,
+        "losses": 21,
+        "net": 20767.1,
+        "final": 120767.1,
+        "max_dd": 43822.79,
+        "green": 11,
+        "red": 18
+      },
+      "hold": {
+        "sessions": 31,
+        "traded": 11,
+        "setups": 13,
+        "wins": 3,
+        "losses": 10,
+        "net": -19735.25,
+        "final": 80264.75,
+        "max_dd": 27134.95,
+        "green": 3,
+        "red": 8
+      },
+      "hold_wr": 0.231
+    }
+  ],
+  "lesson": "Sensex only Tue/Wed; Mon=pre-expiry cutoff. Train for Tuesday gamma blast (ORB/post-decay/SR). Off-days dual capital stays on Nifty."
+}

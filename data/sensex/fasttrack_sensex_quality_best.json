@@ -1,0 +1,294 @@
+{
+  "best_name": "sr_plus_micro",
+  "score": 87791.61,
+  "hold": {
+    "sessions": 76,
+    "traded": 10,
+    "setups": 10,
+    "wins": 8,
+    "losses": 2,
+    "net": 85706.94,
+    "final": 185706.94,
+    "max_dd": 7051.11,
+    "green": 8,
+    "red": 2
+  },
+  "hold_wr": 0.8,
+  "full": {
+    "sessions": 251,
+    "traded": 36,
+    "setups": 38,
+    "wins": 24,
+    "losses": 14,
+    "net": 186097.31,
+    "final": 286097.31,
+    "max_dd": 37165.89,
+    "green": 23,
+    "red": 13
+  },
+  "full_wr": 0.632,
+  "candidates": [
+    {
+      "name": "sr_plus_micro",
+      "score": 87791.61,
+      "train": {
+        "sessions": 175,
+        "traded": 26,
+        "setups": 28,
+        "wins": 16,
+        "losses": 12,
+        "net": 100390.37,
+        "final": 200390.37,
+        "max_dd": 37165.89,
+        "green": 15,
+        "red": 11
+      },
+      "hold": {
+        "sessions": 76,
+        "traded": 10,
+        "setups": 10,
+        "wins": 8,
+        "losses": 2,
+        "net": 85706.94,
+        "final": 185706.94,
+        "max_dd": 7051.11,
+        "green": 8,
+        "red": 2
+      },
+      "hold_wr": 0.8
+    },
+    {
+      "name": "pa_sr_only_no_pb",
+      "score": 84312.13,
+      "train": {
+        "sessions": 175,
+        "traded": 18,
+        "setups": 18,
+        "wins": 12,
+        "losses": 6,
+        "net": 107182.31,
+        "final": 207182.31,
+        "max_dd": 33201.16,
+        "green": 12,
+        "red": 6
+      },
+      "hold": {
+        "sessions": 76,
+        "traded": 9,
+        "setups": 9,
+        "wins": 7,
+        "losses": 2,
+        "net": 83027.46,
+        "final": 183027.46,
+        "max_dd": 7051.11,
+        "green": 7,
+        "red": 2
+      },
+      "hold_wr": 0.778
+    },
+    {
+      "name": "sr_reclaim_pe_break",
+      "score": 70288.6,
+      "train": {
+        "sessions": 175,
+        "traded": 23,
+        "setups": 23,
+        "wins": 13,
+        "losses": 10,
+        "net": 81472.47,
+        "final": 181472.47,
+        "max_dd": 43628.58,
+        "green": 13,
+        "red": 10
+      },
+      "hold": {
+        "sessions": 76,
+        "traded": 10,
+        "setups": 10,
+        "wins": 7,
+        "losses": 3,
+        "net": 72511.81,
+        "final": 172511.81,
+        "max_dd": 15077.38,
+        "green": 7,
+        "red": 3
+      },
+      "hold_wr": 0.7
+    },
+    {
+      "name": "baseline_s368",
+      "score": 49233.59,
+      "train": {
+        "sessions": 175,
+        "traded": 169,
+        "setups": 192,
+        "wins": 92,
+        "losses": 100,
+        "net": 35537.58,
+        "final": 135537.58,
+        "max_dd": 54498.97,
+        "green": 74,
+        "red": 95
+      },
+      "hold": {
+        "sessions": 76,
+        "traded": 72,
+        "setups": 81,
+        "wins": 37,
+        "losses": 44,
+        "net": 74917.23,
+        "final": 174917.23,
+        "max_dd": 21612.12,
+        "green": 30,
+        "red": 42
+      },
+      "hold_wr": 0.457
+    },
+    {
+      "name": "sr_mom_strict",
+      "score": -4574.47,
+      "train": {
+        "sessions": 175,
+        "traded": 7,
+        "setups": 7,
+        "wins": 4,
+        "losses": 3,
+        "net": 67227.62,
+        "final": 167227.62,
+        "max_dd": 13374.14,
+        "green": 4,
+        "red": 3
+      },
+      "hold": {
+        "sessions": 76,
+        "traded": 6,
+        "setups": 6,
+        "wins": 1,
+        "losses": 5,
+        "net": 4516.33,
+        "final": 104516.33,
+        "max_dd": 14635.99,
+        "green": 1,
+        "red": 5
+      },
+      "hold_wr": 0.167
+    },
+    {
+      "name": "sr_reclaim_only",
+      "score": -5561.45,
+      "train": {
+        "sessions": 175,
+        "traded": 11,
+        "setups": 11,
+        "wins": 7,
+        "losses": 4,
+        "net": 77245.25,
+        "final": 177245.25,
+        "max_dd": 9549.56,
+        "green": 7,
+        "red": 4
+      },
+      "hold": {
+        "sessions": 76,
+        "traded": 7,
+        "setups": 7,
+        "wins": 2,
+        "losses": 5,
+        "net": 3141.73,
+        "final": 103141.73,
+        "max_dd": 16010.59,
+        "green": 2,
+        "red": 5
+      },
+      "hold_wr": 0.286
+    },
+    {
+      "name": "sr_primary_no_pa",
+      "score": -5827.78,
+      "train": {
+        "sessions": 175,
+        "traded": 50,
+        "setups": 50,
+        "wins": 22,
+        "losses": 28,
+        "net": 69371.79,
+        "final": 169371.79,
+        "max_dd": 60884.67,
+        "green": 22,
+        "red": 28
+      },
+      "hold": {
+        "sessions": 76,
+        "traded": 19,
+        "setups": 19,
+        "wins": 7,
+        "losses": 12,
+        "net": 13221.73,
+        "final": 113221.73,
+        "max_dd": 38165.04,
+        "green": 7,
+        "red": 12
+      },
+      "hold_wr": 0.368
+    },
+    {
+      "name": "ultra_sr_1td",
+      "score": -7285.03,
+      "train": {
+        "sessions": 175,
+        "traded": 7,
+        "setups": 7,
+        "wins": 4,
+        "losses": 3,
+        "net": 67227.62,
+        "final": 167227.62,
+        "max_dd": 13374.14,
+        "green": 4,
+        "red": 3
+      },
+      "hold": {
+        "sessions": 76,
+        "traded": 6,
+        "setups": 6,
+        "wins": 1,
+        "losses": 5,
+        "net": 2431.28,
+        "final": 102431.28,
+        "max_dd": 16721.04,
+        "green": 1,
+        "red": 5
+      },
+      "hold_wr": 0.167
+    },
+    {
+      "name": "sr_reclaim_s32",
+      "score": -41093.93,
+      "train": {
+        "sessions": 175,
+        "traded": 19,
+        "setups": 19,
+        "wins": 11,
+        "losses": 8,
+        "net": 148597.91,
+        "final": 248597.91,
+        "max_dd": 14702.8,
+        "green": 11,
+        "red": 8
+      },
+      "hold": {
+        "sessions": 76,
+        "traded": 7,
+        "setups": 7,
+        "wins": 0,
+        "losses": 7,
+        "net": -25687.64,
+        "final": 74312.36,
+        "max_dd": 25687.64,
+        "green": 0,
+        "red": 7
+      },
+      "hold_wr": 0.0
+    }
+  ],
+  "lesson": "PA_PB_RESUME flooded reds; DIR SR_RECLAIM is the edge. Quality retrain disables PA noise and requires confirmed S/R."
+}

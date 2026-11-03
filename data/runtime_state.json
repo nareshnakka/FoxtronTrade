@@ -1,0 +1,35 @@
+{
+  "algo1": {
+    "phase": "SCAN",
+    "open_trade_id": null,
+    "open_symbol": null,
+    "entry_price": null,
+    "setup_id": null,
+    "open_count": 0,
+    "open_ids": []
+  },
+  "algo2": {
+    "phase": "SCAN",
+    "setup_id": null,
+    "ce_trade_id": null,
+    "pe_trade_id": null,
+    "ce_symbol": null,
+    "pe_symbol": null,
+    "ce_entry": null,
+    "pe_entry": null,
+    "breakout_side": null,
+    "fallen_side": null,
+    "breakout_trade_id": null,
+    "fallen_trade_id": null,
+    "breakout_peak": null,
+    "fallen_low": null,
+    "mid_at_entry": null,
+    "fallen_rolled": false,
+    "fallen_roll_from": null,
+    "fallen_roll_to": null,
+    "fallen_strike": null,
+    "fallen_expiry": null
+  },
+  "setup_owner": null,
+  "saved_at": "2026-11-04T00:09:27.251196+05:30"
+}

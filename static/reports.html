@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FoxtronTrade — Reports & Learning</title>
+  <style>
+    :root {
+      --bg: #0b1017; --panel: #141c27; --line: #243041; --text: #e8eef7;
+      --muted: #8fa0b8; --accent: #3d9cf0; --up: #26a69a; --down: #ef5350;
+      --paper: #5b8def; --live: #e8a838;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font-family: "Segoe UI", system-ui, sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #1a2740 0%, var(--bg) 55%);
+      color: var(--text); min-height: 100vh;
+    }
+    header {
+      display: flex; flex-wrap: wrap; gap: 12px; align-items: center;
+      padding: 14px 20px; border-bottom: 1px solid var(--line);
+      background: #101826cc; position: sticky; top: 0; z-index: 5;
+    }
+    h1 { margin: 0; font-size: 1.15rem; font-weight: 650; }
+    .meta { color: var(--muted); font-size: 0.8rem; }
+    a.btn, button {
+      background: #1c2736; color: var(--text); border: 1px solid var(--line);
+      border-radius: 8px; padding: 7px 12px; text-decoration: none; font-size: 0.85rem; cursor: pointer;
+    }
+    a.btn:hover, button:hover { border-color: var(--accent); }
+    button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    button.paper-active { background: #1e3a6e; border-color: var(--paper); }
+    button.live-active { background: #5a4010; border-color: var(--live); }
+    .grow { flex: 1; }
+    main { padding: 18px 20px 40px; max-width: 1240px; margin: 0 auto; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+    .cards {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px; margin-bottom: 18px;
+    }
+    .card {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px;
+    }
+    .card.paper-card { border-color: #2a4a7a; }
+    .card.live-card { border-color: #6a5020; }
+    .card .label { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .card .value { font-size: 1.4rem; font-weight: 700; margin-top: 6px; font-variant-numeric: tabular-nums; }
+    .up { color: var(--up); } .down { color: var(--down); }
+    .split { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; font-size: 0.75rem; color: var(--muted); }
+    .chip {
+      display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 0.7rem; border: 1px solid var(--line);
+    }
+    .chip.paper { color: var(--paper); border-color: #3a5a9a; }
+    .chip.live { color: var(--live); border-color: #8a6a2a; }
+    .chip.win { color: var(--up); } .chip.loss { color: var(--down); }
+    .chip.right { color: var(--up); border-color: #1f6; }
+    .chip.wrong { color: var(--down); border-color: #a33; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 18px; }
+    @media (max-width: 900px) { .grid2 { grid-template-columns: 1fr; } }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-bottom: 14px; }
+    .panel h2 {
+      margin: 0; padding: 10px 14px; font-size: 0.85rem; color: var(--muted);
+      border-bottom: 1px solid var(--line); font-weight: 600;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.76rem; }
+    th, td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+    th { color: var(--muted); background: #101826; position: sticky; top: 0; }
+    .table-wrap { max-height: 380px; overflow: auto; }
+    .bar-row { display: flex; align-items: center; gap: 10px; padding: 5px 14px; font-size: 0.78rem; }
+    .bar-track { flex: 1; height: 10px; background: #1a2330; border-radius: 6px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 6px; }
+    .bar-fill.up { background: linear-gradient(90deg, #1a6, var(--up)); }
+    .bar-fill.down { background: linear-gradient(90deg, #822, var(--down)); }
+    .empty { padding: 24px; text-align: center; color: var(--muted); }
+    .lesson { padding: 8px 14px; border-bottom: 1px solid var(--line); font-size: 0.78rem; }
+    .dual { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 900px) { .dual { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Reports &amp; Self-Learning</h1>
+    <span class="meta" id="updated">Loading…</span>
+    <div class="grow"></div>
+    <button id="learnBtn">Learn now</button>
+    <button id="refresh">Refresh</button>
+    <a class="btn" href="/" target="_blank">Dashboard</a>
+  </header>
+  <main>
+    <div class="tabs" id="modeTabs">
+      <button data-mode="combined" class="active">Combined</button>
+      <button data-mode="paper">Paper only</button>
+      <button data-mode="live">Live only</button>
+    </div>
+    <div class="tabs" id="periodTabs">
+      <button data-p="daily">Daily</button>
+      <button data-p="weekly">Weekly</button>
+      <button data-p="monthly">Monthly</button>
+      <button data-p="all" class="active">All time</button>
+      <button data-p="custom">Custom range</button>
+    </div>
+    <div class="tabs" id="rangeBar" style="display:none;align-items:center;gap:10px;margin-bottom:12px">
+      <label class="meta">From <input type="date" id="dateFrom" style="background:#1c2736;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 8px" /></label>
+      <label class="meta">To <input type="date" id="dateTo" style="background:#1c2736;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 8px" /></label>
+      <button id="applyRange" class="active">Apply range</button>
+      <span class="meta" id="rangeHint">Any duration — invested, lots, booked P/L</span>
+    </div>
+    <p class="meta" id="storeMeta" style="margin:0 0 14px">All paper + live fills are kept in storage. Dashboard Entries shows today only.</p>
+
+    <div class="dual" id="modeCompare"></div>
+    <div class="cards" id="cards"></div>
+
+    <div class="grid2">
+      <section class="panel">
+        <h2>By algo (<span id="modeLabel">combined</span>)</h2>
+        <div id="algoCards" class="cards" style="margin:12px; grid-template-columns:1fr 1fr"></div>
+      </section>
+      <section class="panel">
+        <h2>Daily P&amp;L bars</h2>
+        <div id="dailyBars"></div>
+      </section>
+    </div>
+
+    <section class="panel">
+      <h2>Self-learning — right vs wrong entries</h2>
+      <div class="cards" id="learnCards" style="margin:12px"></div>
+      <div class="grid2">
+        <div>
+          <h2 style="border:0">Recent labeled samples</h2>
+          <div class="table-wrap" id="learnTableWrap"></div>
+        </div>
+        <div>
+          <h2 style="border:0">Daily lessons / corrections</h2>
+          <div id="lessons"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2 id="dayPnlTitle">Day-wise P&amp;L</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Day</th><th>Trades</th><th>W</th><th>L</th><th>Lots</th>
+              <th>Invested</th><th>Gross ₹</th><th>Net ₹</th><th>Cum Net ₹</th>
+            </tr>
+          </thead>
+          <tbody id="dayPnlBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2 id="tableTitle">Closed trades</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Closed</th><th>Algo</th><th>Mode</th><th>Side</th><th>Symbol</th><th>Expiry</th>
+              <th>Lots</th><th>Invested</th><th>Entry</th><th>Exit</th><th>Pts</th><th>Gross ₹</th><th>Net ₹</th><th>Label</th><th>Reason</th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Open positions</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Opened</th><th>Algo</th><th>Mode</th><th>Side</th><th>Symbol</th><th>Expiry</th>
+              <th>Lots</th><th>Invested</th><th>Entry</th><th>LTP</th><th>Live P&amp;L ₹</th>
+            </tr>
+          </thead>
+          <tbody id="openBody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    let report = null;
+    let period = "all"; // default: full retained history (paper + live)
+    let mode = "combined"; // combined | paper | live
+    let customFrom = "";
+    let customTo = "";
+
+    function investedOf(t) {
+      if (t.invested != null) return Number(t.invested);
+      return Number(t.entry_price || 0) * Number(t.qty || 0);
+    }
+    function netOf(t) {
+      if (t.net_pnl_rupees != null) return Number(t.net_pnl_rupees);
+      return Number(t.pnl_rupees || 0);
+    }
+
+    function fmtExpiry(iso) {
+      if (!iso) return "—";
+      try {
+        const d = new Date(String(iso).slice(0, 10) + "T00:00:00");
+        return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "2-digit" });
+      } catch (_) {
+        return String(iso).slice(0, 10);
+      }
+    }
+
+    const fmt = (n) => Number(n || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+    const cls = (n) => (Number(n) > 0 ? "up" : Number(n) < 0 ? "down" : "");
+    const money = (n) => {
+      const v = Number(n || 0);
+      return (v >= 0 ? "₹" : "-₹") + fmt(Math.abs(v));
+    };
+
+    function usingCustom() {
+      return period === "custom" && report.custom_range;
+    }
+
+    function periodBlock() {
+      if (usingCustom()) {
+        const cr = report.custom_range;
+        return {
+          stats: cr.stats || {},
+          by_algo: {
+            algo1: {
+              trades: cr.by_algo?.algo1?.trades || 0,
+              pnl_rupees: cr.by_algo?.algo1?.pnl_rupees || 0,
+              win_rate: 0,
+            },
+            algo2: {
+              trades: cr.by_algo?.algo2?.trades || 0,
+              pnl_rupees: cr.by_algo?.algo2?.pnl_rupees || 0,
+              win_rate: 0,
+            },
+          },
+          trades: cr.trades || [],
+        };
+      }
+      if (mode === "paper") return report.periods_paper[period];
+      if (mode === "live") return report.periods_live[period];
+      return report.periods[period];
+    }
+
+    function seriesForMode() {
+      if (usingCustom()) return report.custom_range.daily_series || [];
+      if (mode === "paper") return report.daily_series_paper || [];
+      if (mode === "live") return report.daily_series_live || [];
+      return report.daily_series || [];
+    }
+
+    function openForMode() {
+      if (usingCustom()) return report.custom_range.open_trades || [];
+      if (mode === "paper") return report.open_paper || [];
+      if (mode === "live") return report.open_live || [];
+      return report.open_trades || [];
+    }
+
+    function card(label, value, sub, extraClass = "") {
+      const num = typeof value === "number";
+      return `<div class="card ${extraClass}">
+        <div class="label">${label}</div>
+        <div class="value ${num ? cls(value) : ""}">${num ? money(value) : value}</div>
+        ${sub ? `<div class="split">${sub}</div>` : ""}
+      </div>`;
+    }
+
+    function renderCompare() {
+      let p = report.periods_paper?.[period]?.stats || {};
+      let l = report.periods_live?.[period]?.stats || {};
+      if (usingCustom() && report.filter) {
+        // Approximate paper/live split from custom filter trades
+        const rows = report.custom_range.trades || [];
+        const paperRows = rows.filter((t) => t.mode !== "live");
+        const liveRows = rows.filter((t) => t.mode === "live");
+        const sumPnl = (rs) => rs.reduce((a, t) => a + Number(t.pnl_rupees || 0), 0);
+        p = {
+          pnl_rupees: sumPnl(paperRows),
+          trades: paperRows.length,
+          wins: paperRows.filter((t) => Number(t.pnl_rupees) > 0).length,
+          losses: paperRows.filter((t) => Number(t.pnl_rupees) < 0).length,
+          win_rate: paperRows.length
+            ? Math.round(paperRows.filter((t) => Number(t.pnl_rupees) > 0).length / paperRows.length * 1000) / 10
+            : 0,
+        };
+        l = {
+          pnl_rupees: sumPnl(liveRows),
+          trades: liveRows.length,
+          wins: liveRows.filter((t) => Number(t.pnl_rupees) > 0).length,
+          losses: liveRows.filter((t) => Number(t.pnl_rupees) < 0).length,
+          win_rate: liveRows.length
+            ? Math.round(liveRows.filter((t) => Number(t.pnl_rupees) > 0).length / liveRows.length * 1000) / 10
+            : 0,
+        };
+      }
+      document.getElementById("modeCompare").innerHTML = `
+        <div class="card paper-card">
+          <div class="label">Paper — ${period}</div>
+          <div class="value ${cls(p.pnl_rupees)}">${money(p.pnl_rupees)}</div>
+          <div class="split">
+            <span class="chip paper">${p.trades || 0} trades</span>
+            <span class="chip win">${p.wins || 0}W</span>
+            <span class="chip loss">${p.losses || 0}L</span>
+            <span class="chip">WR ${p.win_rate || 0}%</span>
+            <span>Unreal ${money(report.unrealized_paper)}</span>
+          </div>
+        </div>
+        <div class="card live-card">
+          <div class="label">Live — ${period}</div>
+          <div class="value ${cls(l.pnl_rupees)}">${money(l.pnl_rupees)}</div>
+          <div class="split">
+            <span class="chip live">${l.trades || 0} trades</span>
+            <span class="chip win">${l.wins || 0}W</span>
+            <span class="chip loss">${l.losses || 0}L</span>
+            <span class="chip">WR ${l.win_rate || 0}%</span>
+            <span>Unreal ${money(report.unrealized_live)}</span>
+          </div>
+        </div>`;
+    }
+
+    function renderLearning() {
+      const L = report.learning || {};
+      if (L.error) {
+        document.getElementById("learnCards").innerHTML = `<div class="empty">${L.error}</div>`;
+        return;
+      }
+      const st = L.state || {};
+      document.getElementById("learnCards").innerHTML = [
+        card("Paper right/wrong", `${L.paper?.right || 0} / ${L.paper?.wrong || 0}`,
+          `<span class="chip right">WR ${L.paper?.win_rate || 0}%</span><span class="chip paper">PnL ${money(L.paper?.pnl)}</span>`, "paper-card"),
+        card("Live right/wrong", `${L.live?.right || 0} / ${L.live?.wrong || 0}`,
+          `<span class="chip right">WR ${L.live?.win_rate || 0}%</span><span class="chip live">PnL ${money(L.live?.pnl)}</span>`, "live-card"),
+        card("Learned prior PE", `${((st.prior_pe || 0.65) * 100) | 0}%`, `min conf ${st.algo1_min_confidence ?? "—"}`),
+        card("Last daily learn", st.last_daily_learn || "—",
+          (L.learn_result?.changes || []).slice(0, 2).join(" · ") || L.learn_result?.reason || "waiting samples"),
+      ].join("");
+
+      const recent = [...(L.paper?.recent || []), ...(L.live?.recent || [])]
+        .sort((a, b) => String(b.ts || "").localeCompare(String(a.ts || "")))
+        .slice(0, 25);
+      document.getElementById("learnTableWrap").innerHTML = `
+        <table><thead><tr>
+          <th>When</th><th>Mode</th><th>Side</th><th>Label</th><th>P&amp;L</th><th>Tags</th>
+        </tr></thead><tbody>
+        ${recent.length ? recent.map((r) => `<tr>
+          <td>${(r.closed_at || r.ts || "").replace("T", " ").slice(0, 19)}</td>
+          <td><span class="chip ${r.mode === "live" ? "live" : "paper"}">${r.mode}</span></td>
+          <td>${r.side || ""}</td>
+          <td><span class="chip ${r.label === "RIGHT" ? "right" : "wrong"}">${r.label}</span></td>
+          <td class="${cls(r.pnl_rupees)}">${money(r.pnl_rupees)}</td>
+          <td>${((r.features || {}).tags || []).slice(0, 4).join(", ")}</td>
+        </tr>`).join("") : `<tr><td colspan="6" class="empty">No labeled samples yet — close some trades</td></tr>`}
+        </tbody></table>`;
+
+      const lessons = L.lessons || [];
+      document.getElementById("lessons").innerHTML = lessons.length
+        ? lessons.map((x) => `<div class="lesson"><b>${x.date}</b> · ${x.samples || 0} samples<br/>
+            <span class="meta">${(x.changes || []).join(" · ") || "no param change"}</span></div>`).join("")
+        : `<div class="empty">No daily lessons yet</div>`;
+    }
+
+    function render() {
+      if (!report) return;
+      document.getElementById("modeLabel").textContent = mode;
+      renderCompare();
+      const p = periodBlock();
+      const s = p.stats;
+      const unreal =
+        mode === "paper" ? report.unrealized_paper :
+        mode === "live" ? report.unrealized_live : report.unrealized_pnl;
+
+      const netShow = s.net_pnl_rupees != null ? s.net_pnl_rupees : s.pnl_rupees;
+      document.getElementById("cards").innerHTML = [
+        card("Booked P&L", netShow, `<span class="chip ${mode === "live" ? "live" : "paper"}">${mode}</span>` +
+          (s.pnl_rupees != null ? ` · gross ${money(s.pnl_rupees)}` : "")),
+        card("Capital invested", Number(s.invested || 0), `${s.lots || 0} lots · charges ${money(s.charges || 0)}`),
+        card("Win rate", `${s.win_rate || 0}%`, `<span class="chip win">${s.wins || 0}W</span><span class="chip loss">${s.losses || 0}L</span>`),
+        card("Trades", s.trades || 0, `Points ${s.pnl_points ?? "—"}`),
+        card("Best / Worst", s.best ?? 0, `<span class="down">Worst ${money(s.worst)}</span>`),
+        card("Unrealized", unreal, `${openForMode().length} open`),
+      ].join("");
+
+      document.getElementById("algoCards").innerHTML = ["algo1", "algo2"].map((a) => {
+        const st = p.by_algo[a] || {};
+        return card(a.toUpperCase(), st.pnl_rupees || 0, `${st.trades || 0} trades · WR ${st.win_rate || 0}%`);
+      }).join("");
+
+      const rows = p.trades || [];
+      const dayMap = {};
+      for (const t of rows) {
+        const day = String(t.closed_at || t.opened_at || "").slice(0, 10);
+        if (!day) continue;
+        if (!dayMap[day]) {
+          dayMap[day] = { date: day, trades: 0, wins: 0, losses: 0, lots: 0, invested: 0, gross: 0, net: 0 };
+        }
+        const d = dayMap[day];
+        const gross = Number(t.pnl_rupees || 0);
+        const net = netOf(t);
+        d.trades += 1;
+        d.lots += Number(t.lots || 0);
+        d.invested += investedOf(t);
+        d.gross += gross;
+        d.net += net;
+        if (net > 0) d.wins += 1;
+        else if (net < 0) d.losses += 1;
+      }
+      const dayRows = Object.keys(dayMap).sort().map((k) => dayMap[k]);
+      let cum = 0;
+      for (const d of dayRows) {
+        cum += d.net;
+        d.cum = cum;
+      }
+
+      const series = dayRows.length
+        ? dayRows.map((d) => ({ date: d.date, pnl: d.net }))
+        : seriesForMode();
+      const maxAbs = Math.max(1, ...series.map((x) => Math.abs(x.pnl)));
+      document.getElementById("dailyBars").innerHTML = series.length
+        ? series.map((row) => {
+            const pct = Math.min(100, (Math.abs(row.pnl) / maxAbs) * 100);
+            const c = row.pnl >= 0 ? "up" : "down";
+            return `<div class="bar-row">
+              <span style="width:88px" class="meta">${row.date.slice(5)}</span>
+              <div class="bar-track"><div class="bar-fill ${c}" style="width:${pct}%"></div></div>
+              <span class="${c}" style="width:72px;text-align:right">${money(row.pnl)}</span>
+            </div>`;
+          }).join("")
+        : `<div class="empty">No closed ${mode} trades this period</div>`;
+
+      const rangeLbl = usingCustom()
+        ? `custom ${customFrom || "…"} → ${customTo || "…"}`
+        : period;
+      document.getElementById("dayPnlTitle").textContent = `Day-wise P&L — ${mode} / ${rangeLbl}`;
+      document.getElementById("dayPnlBody").innerHTML = dayRows.length
+        ? dayRows.map((d) => `<tr>
+            <td>${d.date}</td>
+            <td>${d.trades}</td>
+            <td class="up">${d.wins}</td>
+            <td class="down">${d.losses}</td>
+            <td>${d.lots}</td>
+            <td>${money(d.invested)}</td>
+            <td class="${cls(d.gross)}">${money(d.gross)}</td>
+            <td class="${cls(d.net)}"><b>${money(d.net)}</b></td>
+            <td class="${cls(d.cum)}">${money(d.cum)}</td>
+          </tr>`).join("") +
+          (() => {
+            const totNet = dayRows.reduce((a, d) => a + d.net, 0);
+            const totGross = dayRows.reduce((a, d) => a + d.gross, 0);
+            const totInv = dayRows.reduce((a, d) => a + d.invested, 0);
+            const totLots = dayRows.reduce((a, d) => a + d.lots, 0);
+            const totTr = dayRows.reduce((a, d) => a + d.trades, 0);
+            const totW = dayRows.reduce((a, d) => a + d.wins, 0);
+            const totL = dayRows.reduce((a, d) => a + d.losses, 0);
+            return `<tr style="border-top:2px solid var(--line);font-weight:700">
+              <td>Total</td><td>${totTr}</td>
+              <td class="up">${totW}</td><td class="down">${totL}</td>
+              <td>${totLots}</td><td>${money(totInv)}</td>
+              <td class="${cls(totGross)}">${money(totGross)}</td>
+              <td class="${cls(totNet)}">${money(totNet)}</td>
+              <td class="${cls(totNet)}">${money(totNet)}</td>
+            </tr>`;
+          })()
+        : `<tr><td colspan="9" class="empty">No day P&L for this period</td></tr>`;
+
+      document.getElementById("tableTitle").textContent = `Closed trades — ${mode} / ${rangeLbl}`;
+      document.getElementById("tbody").innerHTML = rows.length
+        ? rows.map((t) => {
+            const pnl = Number(t.pnl_rupees || 0);
+            const net = netOf(t);
+            const label = pnl > 0 ? "RIGHT" : pnl < 0 ? "WRONG" : "FLAT";
+            return `<tr>
+              <td>${(t.closed_at || "").replace("T", " ").slice(0, 19)}</td>
+              <td>${t.algo || ""}</td>
+              <td><span class="chip ${t.mode === "live" ? "live" : "paper"}">${t.mode || ""}</span></td>
+              <td>${t.side || ""}</td>
+              <td>${t.symbol || ""}</td>
+              <td>${fmtExpiry(t.expiry)}</td>
+              <td>${t.lots || ""}</td>
+              <td>${money(investedOf(t))}</td>
+              <td>${Number(t.entry_price).toFixed(1)}</td>
+              <td>${t.exit_price != null ? Number(t.exit_price).toFixed(1) : ""}</td>
+              <td class="${cls(t.pnl_points)}">${t.pnl_points ?? ""}</td>
+              <td class="${cls(t.pnl_rupees)}">${money(t.pnl_rupees)}</td>
+              <td class="${cls(net)}">${money(net)}</td>
+              <td><span class="chip ${label === "RIGHT" ? "right" : label === "WRONG" ? "wrong" : ""}">${label}</span></td>
+              <td>${t.exit_reason || t.note || ""}</td>
+            </tr>`;
+          }).join("")
+        : `<tr><td colspan="15" class="empty">No trades</td></tr>`;
+
+      const opens = openForMode();
+      document.getElementById("openBody").innerHTML = opens.length
+        ? opens.map((t) => `<tr>
+            <td>${(t.opened_at || "").replace("T", " ").slice(0, 19)}</td>
+            <td>${t.algo || ""}</td>
+            <td><span class="chip ${t.mode === "live" ? "live" : "paper"}">${t.mode || ""}</span></td>
+            <td>${t.side || ""}</td>
+            <td>${t.symbol || ""}</td>
+            <td>${fmtExpiry(t.expiry)}</td>
+            <td>${t.lots || ""}</td>
+            <td>${money(investedOf(t))}</td>
+            <td>${Number(t.entry_price).toFixed(1)}</td>
+            <td>${t.live_price != null ? Number(t.live_price).toFixed(1) : "—"}</td>
+            <td class="${cls(t.live_pnl_rupees)}">${money(t.live_pnl_rupees)}</td>
+          </tr>`).join("")
+        : `<tr><td colspan="11" class="empty">No open ${mode} positions</td></tr>`;
+
+      renderLearning();
+    }
+
+    function syncRangeBar() {
+      const bar = document.getElementById("rangeBar");
+      bar.style.display = period === "custom" ? "flex" : "none";
+    }
+
+    async function load() {
+      const q = new URLSearchParams();
+      q.set("mode", mode);
+      if (period === "custom") {
+        if (customFrom) q.set("from", customFrom);
+        if (customTo) q.set("to", customTo);
+      }
+      const res = await fetch("/api/reports?" + q.toString());
+      report = await res.json();
+      document.getElementById("updated").textContent =
+        `Generated ${(report.generated_at || "").replace("T", " ").slice(0, 19)}`;
+      const sm = document.getElementById("storeMeta");
+      if (sm) {
+        sm.textContent =
+          `Stored ${report.stored_total || 0} trades ` +
+          `(${report.stored_closed || 0} closed · ${report.stored_open || 0} open · ` +
+          `paper ${report.stored_paper || 0} · live ${report.stored_live || 0}) — never auto-deleted. ` +
+          `Dashboard Entries = today only.`;
+      }
+      render();
+    }
+
+    document.querySelectorAll("#periodTabs button").forEach((btn) => {
+      btn.onclick = () => {
+        document.querySelectorAll("#periodTabs button").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        period = btn.dataset.p;
+        syncRangeBar();
+        if (period === "custom") {
+          // wait for Apply; still render period defaults until range set
+          if (customFrom || customTo) load();
+          else render();
+        } else {
+          customFrom = "";
+          customTo = "";
+          load();
+        }
+      };
+    });
+    document.querySelectorAll("#modeTabs button").forEach((btn) => {
+      btn.onclick = () => {
+        document.querySelectorAll("#modeTabs button").forEach((b) => {
+          b.classList.remove("active", "paper-active", "live-active");
+        });
+        mode = btn.dataset.mode;
+        btn.classList.add("active");
+        if (mode === "paper") btn.classList.add("paper-active");
+        if (mode === "live") btn.classList.add("live-active");
+        load();
+      };
+    });
+    document.getElementById("applyRange").onclick = () => {
+      customFrom = document.getElementById("dateFrom").value || "";
+      customTo = document.getElementById("dateTo").value || "";
+      if (!customFrom && !customTo) {
+        alert("Pick a from and/or to date");
+        return;
+      }
+      period = "custom";
+      document.querySelectorAll("#periodTabs button").forEach((b) => {
+        b.classList.toggle("active", b.dataset.p === "custom");
+      });
+      syncRangeBar();
+      load();
+    };
+    document.getElementById("refresh").onclick = load;
+    document.getElementById("learnBtn").onclick = async () => {
+      const r = await fetch("/api/learn", { method: "POST" });
+      const j = await r.json();
+      alert(
+        j.skipped
+          ? `Skipped: ${j.reason || "already learned"}`
+          : `Learned.\n${((j.lesson || {}).changes || []).join("\n") || "updated"}`
+      );
+      load();
+    };
+    load();
+    setInterval(load, 20000);
+  </script>
+</body>
+</html>

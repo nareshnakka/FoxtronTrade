@@ -1,0 +1,33 @@
+{
+  "sensex": {
+    "name": "sensex",
+    "n": 251,
+    "med_rng": 620.7,
+    "p90_rng": 1174.6,
+    "med_or": 170.0,
+    "p90_or": 312.8,
+    "med_abs_chg": 297.1,
+    "med_mom10": 41.1,
+    "med_spot": 77509.9
+  },
+  "nifty": {
+    "name": "nifty",
+    "n": 227,
+    "med_rng": 193.7,
+    "p90_rng": 368.0,
+    "med_or": 54.8,
+    "p90_or": 97.9,
+    "med_abs_chg": 86.8,
+    "med_mom10": 12.6,
+    "med_spot": 24081.1
+  },
+  "scale_ratios": {
+    "med_rng": 3.204,
+    "med_or": 3.102,
+    "med_abs_chg": 3.423,
+    "med_mom10": 3.262,
+    "med_spot": 3.219
+  },
+  "recommended_point_scale": 3.2,
+  "note": "Multiply Nifty point gates by recommended_point_scale for Sensex. % exits stay unchanged."
+}

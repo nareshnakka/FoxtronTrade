@@ -1,0 +1,22 @@
+{
+  "best_name": "3x_trail5_lots150_90_10",
+  "aim": "300%",
+  "achieved_pct": 319.48,
+  "combined_net": 1597402.5899999999,
+  "nifty_net": 1573461.44,
+  "sensex_net": 23941.15,
+  "split": "90/10",
+  "capital": 500000,
+  "overrides": {
+    "target_pct_high": 100.0,
+    "trail_giveback_pct": 5.0,
+    "lock_profit_pct": 0.5,
+    "max_lots_per_trade": 150,
+    "bank_after_win": false,
+    "max_trades_per_day": 2,
+    "deploy_pct_of_balance": 1.0,
+    "stop_loss_pct": 5.5,
+    "profit_mode": "year_3x_wide_size"
+  },
+  "note": "Entry gates unchanged; size+trail loosened. 80/10 caps ~293%."
+}

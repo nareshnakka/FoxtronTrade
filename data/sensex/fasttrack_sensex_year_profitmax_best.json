@@ -1,0 +1,52 @@
+{
+  "best_name": "exp_orb_retest_run",
+  "selection": "max_holdout_net_train_green",
+  "train": {
+    "sessions": 111,
+    "traded": 38,
+    "setups": 42,
+    "wins": 21,
+    "losses": 21,
+    "net": 35302.44,
+    "final": 135302.44,
+    "max_dd": 52965.64,
+    "green": 18,
+    "red": 20
+  },
+  "hold": {
+    "sessions": 39,
+    "traded": 8,
+    "setups": 9,
+    "wins": 5,
+    "losses": 4,
+    "net": 11270.19,
+    "final": 111270.19,
+    "max_dd": 12481.29,
+    "green": 4,
+    "red": 4
+  },
+  "full": {
+    "sessions": 150,
+    "traded": 46,
+    "setups": 51,
+    "wins": 26,
+    "losses": 25,
+    "net": 47013.57,
+    "final": 147013.57,
+    "max_dd": 52965.64,
+    "green": 22,
+    "red": 24
+  },
+  "last30": {
+    "sessions": 12,
+    "traded": 3,
+    "setups": 4,
+    "wins": 3,
+    "losses": 1,
+    "net": 18807.17,
+    "final": 118807.17,
+    "max_dd": 5267.09,
+    "green": 2,
+    "red": 1
+  }
+}
