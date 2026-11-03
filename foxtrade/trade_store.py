@@ -50,7 +50,9 @@ def open_trade(payload: dict[str, Any], *, allow_add: bool = False) -> dict[str,
             existing = [
                 r
                 for r in rows
-                if r.get("status") == "OPEN" and str(r.get("algo") or "") == algo
+                if r.get("status") == "OPEN"
+                and str(r.get("algo") or "") == algo
+                and not r.get("ledger_kind")  # ignore live-attempt audit rows
             ]
             if existing:
                 return {
@@ -76,6 +78,7 @@ def open_trade(payload: dict[str, Any], *, allow_add: bool = False) -> dict[str,
                 }
         except Exception:
             pass
+        mode = str(payload.get("mode") or "paper")
         trade = {
             "id": str(uuid.uuid4())[:8],
             "opened_at": _now().isoformat(),
@@ -83,11 +86,72 @@ def open_trade(payload: dict[str, Any], *, allow_add: bool = False) -> dict[str,
             "status": "OPEN",
             "pnl_points": 0.0,
             "pnl_rupees": 0.0,
+            "ledger": "live" if mode == "live" else "paper",
             **payload,
         }
         rows.append(trade)
         _write(rows)
         return trade
+
+
+def record_live_attempt(
+    *,
+    paper_trade: dict[str, Any] | None,
+    reason: str,
+    diagnosis: dict[str, Any] | None = None,
+    broker_status: str = "live_buy_failed",
+    exchange: str | None = None,
+) -> dict[str, Any]:
+    """
+    Audit row for a real-money attempt that did not get a confirmed Zerodha fill.
+    Stored as mode=live + CLOSED so Reports → Live only still shows it
+    (excluded from win-rate / booked P&L via ledger_kind=live_attempt).
+    """
+    now = _now().isoformat()
+    src = paper_trade or {}
+    row: dict[str, Any] = {
+        "id": str(uuid.uuid4())[:8],
+        "opened_at": now,
+        "closed_at": now,
+        "status": "CLOSED",
+        "mode": "live",
+        "ledger": "live",
+        "ledger_kind": "live_attempt",
+        "broker_confirmed": False,
+        "live_attempted": True,
+        "broker_status": broker_status,
+        "live_buy_diagnosis": diagnosis or {},
+        "algo": src.get("algo"),
+        "strategy": src.get("strategy"),
+        "symbol": src.get("symbol"),
+        "side": src.get("side"),
+        "underlying": src.get("underlying"),
+        "entry_price": src.get("entry_price"),
+        "exit_price": src.get("entry_price"),
+        "lots": src.get("lots"),
+        "qty": src.get("qty"),
+        "invested": src.get("invested") or 0.0,
+        "pnl_points": 0.0,
+        "pnl_rupees": 0.0,
+        "net_pnl_rupees": 0.0,
+        "charges": 0.0,
+        "order_id": None,
+        "exchange": exchange,
+        "paper_fill_id": src.get("id"),
+        "exit_reason": reason,
+        "note": reason,
+        "label": "LIVE_FAIL",
+    }
+    with _lock:
+        rows = _ensure()
+        rows.append(row)
+        _write(rows)
+    return row
+
+
+def is_pnl_trade(t: dict[str, Any]) -> bool:
+    """True for normal paper/live fills (excludes live-attempt audit rows)."""
+    return str(t.get("ledger_kind") or "") != "live_attempt"
 
 
 def update_trade(trade_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
@@ -133,7 +197,11 @@ def close_trade(
 
 
 def open_trades() -> list[dict[str, Any]]:
-    return [t for t in list_trades() if t.get("status") == "OPEN"]
+    return [
+        t
+        for t in list_trades()
+        if t.get("status") == "OPEN" and str(t.get("ledger_kind") or "") != "live_attempt"
+    ]
 
 
 def _date_prefix(iso: str | None) -> str:
@@ -249,6 +317,8 @@ def period_pnl(algo: str, mode: str, *, since_date: str) -> float:
             continue
         if t.get("status") != "CLOSED":
             continue
+        if not is_pnl_trade(t):
+            continue
         stamp = str(t.get("closed_at") or t.get("opened_at") or "")[:10]
         if stamp < since_date:
             continue
@@ -264,6 +334,8 @@ def seconds_since_last_close(algo: str, mode: str | None = None) -> float | None
     latest: datetime | None = None
     for t in list_trades():
         if t.get("algo") != algo or t.get("status") != "CLOSED":
+            continue
+        if not is_pnl_trade(t):
             continue
         if mode is not None and t.get("mode") != mode:
             continue
@@ -309,6 +381,7 @@ def pnl_summary() -> dict[str, Any]:
         "monthly": _bucket(),
         "by_algo": {
             "algo1": _bucket(),
+            "algo1_sx": _bucket(),
             "algo2": _bucket(),
         },
         "today_charges": 0.0,
@@ -336,9 +409,13 @@ def pnl_summary() -> dict[str, Any]:
         target["charges_" + key] += charges
 
     for t in list_trades():
+        if not is_pnl_trade(t):
+            continue
         mode = t.get("mode") or "paper"
         key = "live" if mode == "live" else "paper"
         algo = t.get("algo") or "algo1"
+        if algo not in out["by_algo"]:
+            out["by_algo"][algo] = _bucket()
 
         if t.get("status") == "CLOSED":
             d = _trade_day(t, open_leg=False)
@@ -459,29 +536,53 @@ def report_details() -> dict[str, Any]:
         except Exception:
             return 0.0
 
+    def _algo_keys(rows: list[dict[str, Any]]) -> list[str]:
+        keys = sorted({str(t.get("algo") or "unknown") for t in rows if t.get("algo")})
+        # Prefer dual-book order
+        prefer = ["algo1", "algo1_sx", "algo2"]
+        ordered = [k for k in prefer if k in keys]
+        ordered += [k for k in keys if k not in ordered]
+        return ordered or prefer[:2]
+
     def stats(rows: list[dict[str, Any]]) -> dict[str, Any]:
-        wins = [t for t in rows if float(t.get("pnl_rupees") or 0) > 0]
-        losses = [t for t in rows if float(t.get("pnl_rupees") or 0) < 0]
-        flat = [t for t in rows if float(t.get("pnl_rupees") or 0) == 0]
-        total = sum(float(t.get("pnl_rupees") or 0) for t in rows)
+        # P&L / win-rate ignore live-attempt audit rows
+        pnl_rows = [t for t in rows if is_pnl_trade(t)]
+        attempts = [t for t in rows if not is_pnl_trade(t)]
+        wins = [t for t in pnl_rows if float(t.get("pnl_rupees") or 0) > 0]
+        losses = [t for t in pnl_rows if float(t.get("pnl_rupees") or 0) < 0]
+        flat = [t for t in pnl_rows if float(t.get("pnl_rupees") or 0) == 0]
+        total = sum(float(t.get("pnl_rupees") or 0) for t in pnl_rows)
         net_total = sum(
             float(t["net_pnl_rupees"])
             if t.get("net_pnl_rupees") is not None
             else float(t.get("pnl_rupees") or 0) - trade_charges(t)
-            for t in rows
+            for t in pnl_rows
         )
-        paper = sum(float(t.get("pnl_rupees") or 0) for t in rows if t.get("mode") != "live")
-        live = sum(float(t.get("pnl_rupees") or 0) for t in rows if t.get("mode") == "live")
-        points = sum(float(t.get("pnl_points") or 0) for t in rows)
-        lots = sum(int(t.get("lots") or 0) for t in rows)
-        invested = sum(_invested(t) for t in rows)
-        charges = sum(trade_charges(t) for t in rows)
+        paper = sum(
+            float(t.get("pnl_rupees") or 0)
+            for t in pnl_rows
+            if t.get("mode") != "live"
+        )
+        live = sum(
+            float(t.get("pnl_rupees") or 0)
+            for t in pnl_rows
+            if t.get("mode") == "live"
+        )
+        points = sum(float(t.get("pnl_points") or 0) for t in pnl_rows)
+        lots = sum(int(t.get("lots") or 0) for t in pnl_rows)
+        invested = sum(_invested(t) for t in pnl_rows)
+        charges = sum(trade_charges(t) for t in pnl_rows)
+        confirmed = sum(
+            1
+            for t in pnl_rows
+            if t.get("mode") == "live" and t.get("broker_confirmed")
+        )
         return {
-            "trades": len(rows),
+            "trades": len(pnl_rows),
             "wins": len(wins),
             "losses": len(losses),
             "flat": len(flat),
-            "win_rate": round(len(wins) / len(rows) * 100, 1) if rows else 0.0,
+            "win_rate": round(len(wins) / len(pnl_rows) * 100, 1) if pnl_rows else 0.0,
             "pnl_rupees": round(total, 2),
             "net_pnl_rupees": round(net_total, 2),
             "pnl_points": round(points, 2),
@@ -490,13 +591,26 @@ def report_details() -> dict[str, Any]:
             "lots": lots,
             "invested": round(invested, 2),
             "charges": round(charges, 2),
-            "best": round(max((float(t.get("pnl_rupees") or 0) for t in rows), default=0), 2),
-            "worst": round(min((float(t.get("pnl_rupees") or 0) for t in rows), default=0), 2),
+            "best": round(max((float(t.get("pnl_rupees") or 0) for t in pnl_rows), default=0), 2),
+            "worst": round(min((float(t.get("pnl_rupees") or 0) for t in pnl_rows), default=0), 2),
+            "live_confirmed": confirmed,
+            "live_attempts_failed": len(attempts),
         }
+
+    def by_algo_block(rows: list[dict[str, Any]]) -> dict[str, Any]:
+        out: dict[str, Any] = {}
+        for a in _algo_keys(rows):
+            out[a] = stats([t for t in rows if str(t.get("algo") or "") == a])
+        # Always expose Nifty / Sensex slots for dual UI
+        for a in ("algo1", "algo1_sx"):
+            out.setdefault(a, stats([]))
+        return out
 
     # Full calendar history for Reports bars (never drop prior months)
     by_day: dict[str, float] = {}
     for t in closed:
+        if not is_pnl_trade(t):
+            continue
         d = _parse_closed_date(t)
         if d is None:
             continue
@@ -505,18 +619,16 @@ def report_details() -> dict[str, Any]:
 
     periods = {}
     for name in ("daily", "weekly", "monthly", "all"):
-        rows = [t for t in closed if in_period(t, name)] if name != "all" else closed
+        rows = [t for t in closed if in_period(t, name)] if name != "all" else list(closed)
         periods[name] = {
             "stats": stats(rows),
-            "by_algo": {
-                "algo1": stats([t for t in rows if t.get("algo") == "algo1"]),
-                "algo2": stats([t for t in rows if t.get("algo") == "algo2"]),
-            },
+            "by_algo": by_algo_block(rows),
             "trades": sorted(rows, key=lambda x: str(x.get("closed_at") or ""), reverse=True),
         }
 
-    # unrealized on open
-    unrealized = round(sum(float(t.get("live_pnl_rupees") or 0) for t in open_rows), 2)
+    # unrealized on open (real + paper positions)
+    open_active = [t for t in open_rows if is_pnl_trade(t)]
+    unrealized = round(sum(float(t.get("live_pnl_rupees") or 0) for t in open_active), 2)
 
     # Separate paper vs live period slices
     def mode_periods(mode: str) -> dict[str, Any]:
@@ -526,10 +638,7 @@ def report_details() -> dict[str, Any]:
             rows = [t for t in base_rows if (t.get("mode") == "live") == (mode == "live")]
             out_m[name] = {
                 "stats": stats(rows),
-                "by_algo": {
-                    "algo1": stats([t for t in rows if t.get("algo") == "algo1"]),
-                    "algo2": stats([t for t in rows if t.get("algo") == "algo2"]),
-                },
+                "by_algo": by_algo_block(rows),
                 "trades": rows,
             }
         return out_m
@@ -537,12 +646,17 @@ def report_details() -> dict[str, Any]:
     paper_day: dict[str, float] = {}
     live_day: dict[str, float] = {}
     for t in closed:
+        if not is_pnl_trade(t):
+            continue
         d = _parse_closed_date(t)
         if d is None:
             continue
         key = d.isoformat()
         bucket = live_day if t.get("mode") == "live" else paper_day
         bucket[key] = round(bucket.get(key, 0) + float(t.get("pnl_rupees") or 0), 2)
+
+    live_fills = [t for t in trades if t.get("mode") == "live" and is_pnl_trade(t)]
+    live_attempts = [t for t in trades if t.get("mode") == "live" and not is_pnl_trade(t)]
 
     return {
         "generated_at": now.isoformat(),
@@ -553,15 +667,15 @@ def report_details() -> dict[str, Any]:
         "daily_series": [{"date": k, "pnl": by_day[k]} for k in sorted(by_day.keys())],
         "daily_series_paper": [{"date": k, "pnl": paper_day[k]} for k in sorted(paper_day.keys())],
         "daily_series_live": [{"date": k, "pnl": live_day[k]} for k in sorted(live_day.keys())],
-        "open_trades": open_rows,
-        "open_paper": [t for t in open_rows if t.get("mode") != "live"],
-        "open_live": [t for t in open_rows if t.get("mode") == "live"],
+        "open_trades": open_active,
+        "open_paper": [t for t in open_active if t.get("mode") != "live"],
+        "open_live": [t for t in open_active if t.get("mode") == "live"],
         "unrealized_pnl": unrealized,
         "unrealized_paper": round(
-            sum(float(t.get("live_pnl_rupees") or 0) for t in open_rows if t.get("mode") != "live"), 2
+            sum(float(t.get("live_pnl_rupees") or 0) for t in open_active if t.get("mode") != "live"), 2
         ),
         "unrealized_live": round(
-            sum(float(t.get("live_pnl_rupees") or 0) for t in open_rows if t.get("mode") == "live"), 2
+            sum(float(t.get("live_pnl_rupees") or 0) for t in open_active if t.get("mode") == "live"), 2
         ),
         "week_start": week_start.isoformat(),
         "month_start": month_start.isoformat(),
@@ -569,9 +683,15 @@ def report_details() -> dict[str, Any]:
         # Retention: every paper + live fill stays in data/trades.json forever
         "stored_total": len(trades),
         "stored_closed": len(closed),
-        "stored_open": len(open_rows),
+        "stored_open": len(open_active),
         "stored_paper": len([t for t in trades if t.get("mode") != "live"]),
-        "stored_live": len([t for t in trades if t.get("mode") == "live"]),
+        "stored_live": len(live_fills),
+        "stored_live_attempts_failed": len(live_attempts),
+        "live_attempts": sorted(
+            live_attempts,
+            key=lambda x: str(x.get("closed_at") or x.get("opened_at") or ""),
+            reverse=True,
+        )[:200],
     }
 
 
@@ -629,22 +749,32 @@ def report_filtered(
         except Exception:
             return 0.0
 
-    wins = [t for t in closed if float(t.get("pnl_rupees") or 0) > 0]
-    losses = [t for t in closed if float(t.get("pnl_rupees") or 0) < 0]
-    gross = sum(float(t.get("pnl_rupees") or 0) for t in closed)
+    pnl_closed = [t for t in closed if is_pnl_trade(t)]
+    wins = [t for t in pnl_closed if float(t.get("pnl_rupees") or 0) > 0]
+    losses = [t for t in pnl_closed if float(t.get("pnl_rupees") or 0) < 0]
+    gross = sum(float(t.get("pnl_rupees") or 0) for t in pnl_closed)
     net = sum(
         float(t["net_pnl_rupees"])
         if t.get("net_pnl_rupees") is not None
         else float(t.get("pnl_rupees") or 0) - trade_charges(t)
-        for t in closed
+        for t in pnl_closed
     )
     unreal = round(sum(float(t.get("live_pnl_rupees") or 0) for t in opens), 2)
     by_day: dict[str, float] = {}
-    for t in closed:
+    for t in pnl_closed:
         k = str(t.get("closed_at") or "")[:10]
         if not k:
             continue
         by_day[k] = round(by_day.get(k, 0) + float(t.get("pnl_rupees") or 0), 2)
+
+    def _algo_slice(algo: str) -> dict[str, Any]:
+        rows = [t for t in pnl_closed if t.get("algo") == algo]
+        return {
+            "trades": len(rows),
+            "pnl_rupees": round(sum(float(t.get("pnl_rupees") or 0) for t in rows), 2),
+            "wins": len([t for t in rows if float(t.get("pnl_rupees") or 0) > 0]),
+            "losses": len([t for t in rows if float(t.get("pnl_rupees") or 0) < 0]),
+        }
 
     return {
         "generated_at": _now().isoformat(),
@@ -652,33 +782,23 @@ def report_filtered(
         "date_from": date_from,
         "date_to": date_to,
         "stats": {
-            "trades": len(closed),
+            "trades": len(pnl_closed),
             "wins": len(wins),
             "losses": len(losses),
-            "win_rate": round(len(wins) / len(closed) * 100, 1) if closed else 0.0,
+            "win_rate": round(len(wins) / len(pnl_closed) * 100, 1) if pnl_closed else 0.0,
             "pnl_rupees": round(gross, 2),
             "net_pnl_rupees": round(net, 2),
-            "lots": sum(int(t.get("lots") or 0) for t in closed),
-            "invested": round(sum(_inv(t) for t in closed), 2),
-            "charges": round(sum(trade_charges(t) for t in closed), 2),
+            "lots": sum(int(t.get("lots") or 0) for t in pnl_closed),
+            "invested": round(sum(_inv(t) for t in pnl_closed), 2),
+            "charges": round(sum(trade_charges(t) for t in pnl_closed), 2),
             "open_count": len(opens),
             "unrealized_pnl": unreal,
+            "live_attempts_failed": len([t for t in closed if not is_pnl_trade(t)]),
         },
         "by_algo": {
-            "algo1": {
-                "trades": len([t for t in closed if t.get("algo") == "algo1"]),
-                "pnl_rupees": round(
-                    sum(float(t.get("pnl_rupees") or 0) for t in closed if t.get("algo") == "algo1"),
-                    2,
-                ),
-            },
-            "algo2": {
-                "trades": len([t for t in closed if t.get("algo") == "algo2"]),
-                "pnl_rupees": round(
-                    sum(float(t.get("pnl_rupees") or 0) for t in closed if t.get("algo") == "algo2"),
-                    2,
-                ),
-            },
+            "algo1": _algo_slice("algo1"),
+            "algo1_sx": _algo_slice("algo1_sx"),
+            "algo2": _algo_slice("algo2"),
         },
         "daily_series": [{"date": k, "pnl": by_day[k]} for k in sorted(by_day.keys())],
         "trades": sorted(closed, key=lambda x: str(x.get("closed_at") or ""), reverse=True),

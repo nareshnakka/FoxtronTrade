@@ -114,14 +114,19 @@ def open_long(
     if extra:
         payload.update(extra)
 
+    live_fail_diag: dict[str, Any] | None = None
+    live_fail_status = ""
+    live_exch: str | None = None
     if mode == "live":
         if _weekend():
             # Keep paper path alive on weekends so dual book / dry-runs still ledger
+            live_fail_diag = diagnose_broker_error("weekend market closed")
+            live_fail_status = "live_skipped_weekend_paper_kept"
             payload["mode"] = "paper"
-            payload["broker_status"] = "live_skipped_weekend_paper_kept"
+            payload["broker_status"] = live_fail_status
             payload["broker_confirmed"] = False
             payload["live_attempted"] = True
-            payload["live_buy_diagnosis"] = diagnose_broker_error("weekend market closed")
+            payload["live_buy_diagnosis"] = live_fail_diag
             note = str(payload.get("note") or "")
             payload["note"] = (
                 f"{note} | LIVE skipped weekend — paper kept".strip(" |")
@@ -129,10 +134,10 @@ def open_long(
         else:
             try:
                 kite = get_authenticated_kite()
-                exch = _opt_exchange_name(symbol, extra=extra)
+                live_exch = _opt_exchange_name(symbol, extra=extra)
                 order_id = kite.place_order(
                     variety=kite.VARIETY_REGULAR,
-                    exchange=_kite_exchange(kite, exch),
+                    exchange=_kite_exchange(kite, live_exch),
                     tradingsymbol=symbol,
                     transaction_type=kite.TRANSACTION_TYPE_BUY,
                     quantity=qty,
@@ -144,18 +149,22 @@ def open_long(
                 payload["broker_status"] = "live_bought"
                 payload["broker_confirmed"] = True
                 payload["live_attempted"] = True
-                payload["exchange"] = exch
+                payload["exchange"] = live_exch
+                payload["ledger"] = "live"
             except Exception as exc:  # noqa: BLE001
                 # Live may fail (margin/auth/reject) — still book PAPER so algo
-                # keeps managing + dashboard retains paper + live ledgers.
-                diag = diagnose_broker_error(exc)
+                # keeps managing; also write a Live-report audit row.
+                live_fail_diag = diagnose_broker_error(exc)
+                live_fail_status = f"live_buy_failed_paper_kept:{exc}"
+                live_exch = _opt_exchange_name(symbol, extra=extra)
                 payload["mode"] = "paper"
-                payload["broker_status"] = f"live_buy_failed_paper_kept:{exc}"
+                payload["broker_status"] = live_fail_status
                 payload["broker_confirmed"] = False
                 payload["live_attempted"] = True
-                payload["live_buy_diagnosis"] = diag
+                payload["live_buy_diagnosis"] = live_fail_diag
+                payload["exchange"] = live_exch
                 note = str(payload.get("note") or "")
-                tip = (diag.get("tips") or [None])[0]
+                tip = (live_fail_diag.get("tips") or [None])[0]
                 payload["note"] = (
                     f"{note} | LIVE BUY failed — paper kept"
                     + (f" · {tip}" if tip else "")
@@ -164,7 +173,20 @@ def open_long(
                     f"LIVE BUY failed — paper fill kept: {exc}"
                 )
 
-    return trade_store.open_trade(payload, allow_add=allow_add)
+    trade = trade_store.open_trade(payload, allow_add=allow_add)
+    # Mirror failed real attempts into Live ledger so Reports → Live only shows them
+    if trade.get("id") and live_fail_diag is not None:
+        try:
+            trade_store.record_live_attempt(
+                paper_trade=trade,
+                reason=str(payload.get("note") or live_fail_status),
+                diagnosis=live_fail_diag,
+                broker_status=live_fail_status,
+                exchange=live_exch,
+            )
+        except Exception:
+            pass
+    return trade
 
 
 def diagnose_broker_error(exc: Any) -> dict[str, Any]:

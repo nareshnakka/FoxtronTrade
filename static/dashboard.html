@@ -381,6 +381,11 @@
       <h2>
         <span class="left">
           <span>Entries / Live P&amp;L</span>
+          <span class="meta" id="entryModeTabs" style="margin-left:10px;display:inline-flex;gap:6px">
+            <button type="button" class="ok" data-emode="all" id="emodeAll">All</button>
+            <button type="button" data-emode="paper" id="emodePaper">Paper</button>
+            <button type="button" data-emode="live" id="emodeLive">Live</button>
+          </span>
           <span class="meta" id="entriesMeta">today only · full history in Reports · select OPEN to square-off</span>
         </span>
         <button type="button" class="max-btn" data-max="trades" title="Maximize">Maximize</button>
@@ -1066,6 +1071,7 @@
     let tradesHeadBuilt = false;
     const selectedTradeIds = new Set();
     let squareOffBusy = false;
+    let entriesModeFilter = "all"; // all | paper | live
 
     function fmtTimeIst(iso) {
       if (!iso) return "—";
@@ -1096,9 +1102,14 @@
       let broker = String(t.broker_status || "");
       if (t.pnl_booked_without_broker_confirm) broker += " · booked@LTP";
       if (t.exit_diagnosis?.code) broker += ` · ${t.exit_diagnosis.code}`;
+      const modeRaw = String(t.mode || "paper");
+      const modeLabel = modeRaw === "live"
+        ? (t.broker_confirmed ? "LIVE ✓" : "LIVE")
+        : (t.live_attempted ? "PAPER*" : "PAPER");
       return {
         algo: String(t.algo || ""),
-        mode: String(t.mode || ""),
+        mode: modeLabel,
+        modeRaw,
         side: String(t.side || ""),
         symbol: String(t.symbol || ""),
         expiry: formatTradeExpiry(expiryRaw, lastScanForTrades),
@@ -1113,6 +1124,7 @@
         note: String(t.exit_reason || t.note || ""),
         isOpen,
         id: t.id,
+        orderId: t.order_id || "",
       };
     }
 
@@ -1221,6 +1233,8 @@
     }
 
     function tradeRowMatches(row) {
+      if (entriesModeFilter === "paper" && row.modeRaw === "live") return false;
+      if (entriesModeFilter === "live" && row.modeRaw !== "live") return false;
       return TRADE_COLS.every((c) => {
         const sel = tradeFilters[c.key];
         if (!sel || sel.size === 0) return true;
@@ -1362,9 +1376,12 @@
         const selCell = r.isOpen
           ? `<td class="sel"><input type="checkbox" class="row-sel" data-id="${r.id}" ${checked} /></td>`
           : `<td class="sel"><input type="checkbox" class="row-sel" disabled title="Closed — cannot square-off" /></td>`;
+        const modeCls = r.modeRaw === "live" ? "badge live" : "badge paper";
         return `<tr class="${rowCls}" data-id="${r.id || ""}">
           ${selCell}
-          <td>${r.algo}</td><td>${r.mode}</td><td>${r.side}</td>
+          <td>${r.algo}</td>
+          <td><span class="${modeCls}" title="${r.orderId || r.broker || ""}">${r.mode}</span></td>
+          <td>${r.side}</td>
           <td>${r.symbol}</td>
           <td title="${r.expiry}">${r.expiry}</td>
           <td>${r.invested}</td>
@@ -1410,8 +1427,13 @@
       tradeRowsCache = [...opens, ...closed];
       const meta = document.getElementById("entriesMeta");
       if (meta) {
-        meta.textContent =
-          `today ${tradeRowsCache.length} · stored history ${historyTotal != null ? historyTotal : "—"} in Reports · select OPEN to square-off`;
+        const nLive = tradeRowsCache.filter((r) => r.modeRaw === "live").length;
+        const nPaper = tradeRowsCache.length - nLive;
+        meta.innerHTML =
+          `today ${tradeRowsCache.length} ` +
+          `(<span class="badge paper">P ${nPaper}</span> ` +
+          `<span class="badge live">L ${nLive}</span>) · ` +
+          `full history in <a href="/reports?mode=live" target="_blank" rel="noopener">Live Reports</a> · select OPEN to square-off`;
       }
       paintTradesBody();
       updateFunnelActiveState();
@@ -1852,8 +1874,19 @@
       tick();
     };
     document.getElementById("reportsBtn").onclick = () => {
-      window.open("/reports", "_blank", "noopener,noreferrer");
+      const live = document.getElementById("modeBadge")?.textContent === "LIVE";
+      window.open(live ? "/reports?mode=live" : "/reports", "_blank", "noopener,noreferrer");
     };
+
+    document.querySelectorAll("#entryModeTabs button").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        entriesModeFilter = btn.dataset.emode || "all";
+        document.querySelectorAll("#entryModeTabs button").forEach((b) => {
+          b.className = b.dataset.emode === entriesModeFilter ? "ok" : "";
+        });
+        paintTradesBody();
+      });
+    });
 
     const grid = document.getElementById("mainGrid");
     document.querySelectorAll(".max-btn").forEach((btn) => {

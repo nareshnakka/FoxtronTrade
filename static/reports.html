@@ -105,7 +105,7 @@
       <button id="applyRange" class="active">Apply range</button>
       <span class="meta" id="rangeHint">Any duration — invested, lots, booked P/L</span>
     </div>
-    <p class="meta" id="storeMeta" style="margin:0 0 14px">All paper + live fills are kept in storage. Dashboard Entries shows today only.</p>
+    <p class="meta" id="storeMeta" style="margin:0 0 14px">All paper + live fills are kept in storage. Use <b>Live only</b> for Zerodha real trades. Dashboard Entries shows today only.</p>
 
     <div class="dual" id="modeCompare"></div>
     <div class="cards" id="cards"></div>
@@ -120,6 +120,22 @@
         <div id="dailyBars"></div>
       </section>
     </div>
+
+    <section class="panel" id="liveAttemptsPanel">
+      <h2>Live attempts (Zerodha fail / no fill)</h2>
+      <p class="meta" style="margin:0 12px 8px">Real-money tries that did not get a confirmed buy — paper fill may still be open. Shown for audit; not in booked P&amp;L.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>When</th><th>Algo</th><th>Side</th><th>Symbol</th><th>Exch</th>
+              <th>Lots</th><th>Broker</th><th>Paper id</th><th>Reason</th>
+            </tr>
+          </thead>
+          <tbody id="liveAttemptsBody"></tbody>
+        </table>
+      </div>
+    </section>
 
     <section class="panel">
       <h2>Self-learning — right vs wrong entries</h2>
@@ -157,8 +173,9 @@
         <table>
           <thead>
             <tr>
-              <th>Closed</th><th>Algo</th><th>Mode</th><th>Side</th><th>Symbol</th><th>Expiry</th>
-              <th>Lots</th><th>Invested</th><th>Entry</th><th>Exit</th><th>Pts</th><th>Gross ₹</th><th>Net ₹</th><th>Label</th><th>Reason</th>
+              <th>Closed</th><th>Algo</th><th>Mode</th><th>Side</th><th>Symbol</th><th>Exch</th><th>Expiry</th>
+              <th>Lots</th><th>Invested</th><th>Entry</th><th>Exit</th><th>Pts</th><th>Gross ₹</th><th>Net ₹</th>
+              <th>Order</th><th>Broker</th><th>Label</th><th>Reason</th>
             </tr>
           </thead>
           <tbody id="tbody"></tbody>
@@ -172,8 +189,8 @@
         <table>
           <thead>
             <tr>
-              <th>Opened</th><th>Algo</th><th>Mode</th><th>Side</th><th>Symbol</th><th>Expiry</th>
-              <th>Lots</th><th>Invested</th><th>Entry</th><th>LTP</th><th>Live P&amp;L ₹</th>
+              <th>Opened</th><th>Algo</th><th>Mode</th><th>Side</th><th>Symbol</th><th>Exch</th><th>Expiry</th>
+              <th>Lots</th><th>Invested</th><th>Entry</th><th>LTP</th><th>Live P&amp;L ₹</th><th>Order</th><th>Broker</th>
             </tr>
           </thead>
           <tbody id="openBody"></tbody>
@@ -377,14 +394,24 @@
           (s.pnl_rupees != null ? ` · gross ${money(s.pnl_rupees)}` : "")),
         card("Capital invested", Number(s.invested || 0), `${s.lots || 0} lots · charges ${money(s.charges || 0)}`),
         card("Win rate", `${s.win_rate || 0}%`, `<span class="chip win">${s.wins || 0}W</span><span class="chip loss">${s.losses || 0}L</span>`),
-        card("Trades", s.trades || 0, `Points ${s.pnl_points ?? "—"}`),
+        card("Trades", s.trades || 0,
+          `Points ${s.pnl_points ?? "—"}` +
+          (mode !== "paper" && (s.live_confirmed || s.live_attempts_failed)
+            ? ` · Zerodha OK ${s.live_confirmed || 0} · fail ${s.live_attempts_failed || 0}`
+            : "")),
         card("Best / Worst", s.best ?? 0, `<span class="down">Worst ${money(s.worst)}</span>`),
         card("Unrealized", unreal, `${openForMode().length} open`),
       ].join("");
 
-      document.getElementById("algoCards").innerHTML = ["algo1", "algo2"].map((a) => {
-        const st = p.by_algo[a] || {};
-        return card(a.toUpperCase(), st.pnl_rupees || 0, `${st.trades || 0} trades · WR ${st.win_rate || 0}%`);
+      const algoNames = Object.keys(p.by_algo || {});
+      const algoOrder = ["algo1", "algo1_sx", "algo2"].filter((a) => algoNames.includes(a))
+        .concat(algoNames.filter((a) => !["algo1", "algo1_sx", "algo2"].includes(a)));
+      const algoLabel = (a) => a === "algo1" ? "NIFTY" : a === "algo1_sx" ? "SENSEX" : a.toUpperCase();
+      document.getElementById("algoCards").innerHTML = (algoOrder.length ? algoOrder : ["algo1", "algo1_sx"]).map((a) => {
+        const st = (p.by_algo || {})[a] || {};
+        return card(algoLabel(a), st.pnl_rupees || 0,
+          `${st.trades || 0} trades · WR ${st.win_rate || 0}%` +
+          (a === "algo1_sx" || mode === "live" ? ` · conf ${st.live_confirmed || 0}` : ""));
       }).join("");
 
       const rows = p.trades || [];
@@ -465,17 +492,22 @@
         : `<tr><td colspan="9" class="empty">No day P&L for this period</td></tr>`;
 
       document.getElementById("tableTitle").textContent = `Closed trades — ${mode} / ${rangeLbl}`;
-      document.getElementById("tbody").innerHTML = rows.length
-        ? rows.map((t) => {
+      const fillRows = rows.filter((t) => t.ledger_kind !== "live_attempt");
+      document.getElementById("tbody").innerHTML = fillRows.length
+        ? fillRows.map((t) => {
             const pnl = Number(t.pnl_rupees || 0);
             const net = netOf(t);
             const label = pnl > 0 ? "RIGHT" : pnl < 0 ? "WRONG" : "FLAT";
+            const conf = t.mode === "live"
+              ? (t.broker_confirmed ? "CONFIRMED" : "unconfirmed")
+              : "paper";
             return `<tr>
               <td>${(t.closed_at || "").replace("T", " ").slice(0, 19)}</td>
               <td>${t.algo || ""}</td>
               <td><span class="chip ${t.mode === "live" ? "live" : "paper"}">${t.mode || ""}</span></td>
               <td>${t.side || ""}</td>
               <td>${t.symbol || ""}</td>
+              <td>${t.exchange || (String(t.symbol || "").startsWith("SENSEX") ? "BFO" : "NFO")}</td>
               <td>${fmtExpiry(t.expiry)}</td>
               <td>${t.lots || ""}</td>
               <td>${money(investedOf(t))}</td>
@@ -484,11 +516,13 @@
               <td class="${cls(t.pnl_points)}">${t.pnl_points ?? ""}</td>
               <td class="${cls(t.pnl_rupees)}">${money(t.pnl_rupees)}</td>
               <td class="${cls(net)}">${money(net)}</td>
+              <td class="meta">${t.order_id || t.exit_order_id || "—"}</td>
+              <td class="meta">${conf}${t.broker_status ? " · " + String(t.broker_status).slice(0, 28) : ""}</td>
               <td><span class="chip ${label === "RIGHT" ? "right" : label === "WRONG" ? "wrong" : ""}">${label}</span></td>
               <td>${t.exit_reason || t.note || ""}</td>
             </tr>`;
           }).join("")
-        : `<tr><td colspan="15" class="empty">No trades</td></tr>`;
+        : `<tr><td colspan="18" class="empty">No ${mode} fills yet — toggle Live trading to send Zerodha orders</td></tr>`;
 
       const opens = openForMode();
       document.getElementById("openBody").innerHTML = opens.length
@@ -498,14 +532,37 @@
             <td><span class="chip ${t.mode === "live" ? "live" : "paper"}">${t.mode || ""}</span></td>
             <td>${t.side || ""}</td>
             <td>${t.symbol || ""}</td>
+            <td>${t.exchange || (String(t.symbol || "").startsWith("SENSEX") ? "BFO" : "NFO")}</td>
             <td>${fmtExpiry(t.expiry)}</td>
             <td>${t.lots || ""}</td>
             <td>${money(investedOf(t))}</td>
             <td>${Number(t.entry_price).toFixed(1)}</td>
             <td>${t.live_price != null ? Number(t.live_price).toFixed(1) : "—"}</td>
             <td class="${cls(t.live_pnl_rupees)}">${money(t.live_pnl_rupees)}</td>
+            <td class="meta">${t.order_id || "—"}</td>
+            <td class="meta">${t.broker_confirmed ? "CONFIRMED" : (t.broker_status || "—")}</td>
           </tr>`).join("")
-        : `<tr><td colspan="11" class="empty">No open ${mode} positions</td></tr>`;
+        : `<tr><td colspan="14" class="empty">No open ${mode} positions</td></tr>`;
+
+      const attempts = (report.live_attempts || []).filter((t) => {
+        if (mode === "paper") return false;
+        return true;
+      });
+      const attPanel = document.getElementById("liveAttemptsPanel");
+      if (attPanel) attPanel.style.display = mode === "paper" ? "none" : "";
+      document.getElementById("liveAttemptsBody").innerHTML = attempts.length
+        ? attempts.map((t) => `<tr>
+            <td>${(t.closed_at || t.opened_at || "").replace("T", " ").slice(0, 19)}</td>
+            <td>${t.algo || ""}</td>
+            <td>${t.side || ""}</td>
+            <td>${t.symbol || ""}</td>
+            <td>${t.exchange || "—"}</td>
+            <td>${t.lots || ""}</td>
+            <td class="meta">${String(t.broker_status || "").slice(0, 48)}</td>
+            <td class="meta">${t.paper_fill_id || "—"}</td>
+            <td>${t.exit_reason || t.note || ""}</td>
+          </tr>`).join("")
+        : `<tr><td colspan="9" class="empty">No failed live attempts yet</td></tr>`;
 
       renderLearning();
     }
@@ -528,14 +585,35 @@
         `Generated ${(report.generated_at || "").replace("T", " ").slice(0, 19)}`;
       const sm = document.getElementById("storeMeta");
       if (sm) {
-        sm.textContent =
-          `Stored ${report.stored_total || 0} trades ` +
+        sm.innerHTML =
+          `Stored <b>${report.stored_total || 0}</b> trades ` +
           `(${report.stored_closed || 0} closed · ${report.stored_open || 0} open · ` +
-          `paper ${report.stored_paper || 0} · live ${report.stored_live || 0}) — never auto-deleted. ` +
-          `Dashboard Entries = today only.`;
+          `<span class="chip paper">paper ${report.stored_paper || 0}</span> ` +
+          `<span class="chip live">live fills ${report.stored_live || 0}</span>` +
+          (report.stored_live_attempts_failed
+            ? ` · live fails ${report.stored_live_attempts_failed}`
+            : "") +
+          `) — never auto-deleted. Dashboard Entries = today only.`;
       }
       render();
     }
+
+    // Deep-link: /reports?mode=live|paper|combined
+    try {
+      const sp = new URLSearchParams(location.search);
+      const m = (sp.get("mode") || "").toLowerCase();
+      if (m === "paper" || m === "live" || m === "combined") {
+        mode = m;
+        document.querySelectorAll("#modeTabs button").forEach((b) => {
+          b.classList.remove("active", "paper-active", "live-active");
+          if (b.dataset.mode === mode) {
+            b.classList.add("active");
+            if (mode === "paper") b.classList.add("paper-active");
+            if (mode === "live") b.classList.add("live-active");
+          }
+        });
+      }
+    } catch (_) {}
 
     document.querySelectorAll("#periodTabs button").forEach((btn) => {
       btn.onclick = () => {
