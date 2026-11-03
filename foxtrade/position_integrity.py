@@ -32,18 +32,40 @@ def any_open(*, algo: str | None = None) -> bool:
 def can_open_new(algo: str, *, cfg: dict[str, Any] | None = None) -> tuple[bool, str]:
     """
     Gate for fresh entries.
-    Default: ban new algo1 while any algo1 OPEN; ban algo2 while any algo2 OPEN.
+    Default: ban new entries while THIS algo still has OPEN.
     Optional: block_new_while_any_open → ban while ANY strategy has OPEN.
+
+    Dual-book exception: with dual_mode, Nifty (algo1) and Sensex (algo1_sx)
+    may both be OPEN up to dual_max_open — sibling books are not blockers.
     """
     cfg = cfg or {}
-    if cfg.get("block_new_while_any_open", True) and any_open():
-        opens = trade_store.open_trades()
-        ids = ", ".join(f"{t.get('algo')}:{t.get('symbol')}" for t in opens[:4])
-        return False, f"OPEN position(s) exist — square first ({ids})"
+    algo = str(algo or "")
+    dual = bool(cfg.get("dual_mode"))
+    dual_algos = {"algo1", "algo1_sx"}
+    opens = trade_store.open_trades()
+
+    # Always: no second primary on the same algo
     mine = open_for_algo(algo)
     if mine:
         ids = ", ".join(f"{t.get('symbol')}@{t.get('entry_price')}" for t in mine[:3])
         return False, f"{algo} still OPEN ({ids}) — no fresh entry until squared"
+
+    if dual and algo in dual_algos:
+        max_open = max(1, int(cfg.get("dual_max_open", 2)))
+        primaries = [
+            t
+            for t in opens
+            if str(t.get("algo") or "") in dual_algos
+            and str(t.get("leg_role") or "primary") != "hedge"
+        ]
+        if len(primaries) >= max_open:
+            ids = ", ".join(f"{t.get('algo')}:{t.get('symbol')}" for t in primaries[:4])
+            return False, f"dual max open {len(primaries)}/{max_open} ({ids})"
+        return True, "ok"
+
+    if cfg.get("block_new_while_any_open", True) and opens:
+        ids = ", ".join(f"{t.get('algo')}:{t.get('symbol')}" for t in opens[:4])
+        return False, f"OPEN position(s) exist — square first ({ids})"
     return True, "ok"
 
 
