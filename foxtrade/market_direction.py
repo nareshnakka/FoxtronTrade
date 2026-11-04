@@ -109,7 +109,12 @@ def analyze_market(
     delay = int(cfg.get("entry_delay_minutes", 12))
     prefer_after = int(cfg.get("prefer_entry_after_minutes", 25))
     if str(cfg.get("entry_style", "orb")).lower() == "orb":
-        prefer_after = max(prefer_after, int(cfg.get("orb_minutes", 45)) + 2)
+        orb_n = int(cfg.get("orb_minutes", 45))
+        if cfg.get("fast_open_mode"):
+            # Trade as soon as short ORB completes (no +2m cushion)
+            prefer_after = max(prefer_after, orb_n)
+        else:
+            prefer_after = max(prefer_after, orb_n + 2)
     # Hard session cut. Prefer_sr keeps window open to sr_no_entry so a 1-bar
     # SR flicker after +195m does not abort persist (Jul24 13:51 win). Cap at
     # sr_no_entry (300 ≈ 14:15) to block Nov2 14:45 late knife.

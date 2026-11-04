@@ -19,6 +19,7 @@ _DEFAULTS: dict[str, Any] = {
     "dual_max_share": 0.55,
     "dual_min_ticket_inr": 8000,
     "dual_deploy_pct": 1.0,
+    "fast_open_mode": True,
     # Sensex calendar: Tue/Wed always; Thu = gamma blast only; Mon cutoff
     "sensex_expiry_weekday": 1,
     "sensex_trade_weekdays": [1, 2],
