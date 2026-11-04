@@ -26,6 +26,7 @@ PY = ROOT / ".venv" / "Scripts" / "python.exe"
 APP = ROOT / "app.py"
 HEARTBEAT = ROOT / "data" / "heartbeat.json"
 LOG = ROOT / "data" / "unattended.log"
+LOCK = ROOT / "data" / "unattended.lock"
 
 # Heartbeat older than this → treat engine as frozen
 MAX_HB_AGE = 90.0
@@ -33,6 +34,84 @@ MAX_HB_AGE = 90.0
 MIN_RESTART_GAP = 45.0
 # How often supervisor checks
 CHECK_EVERY = 10.0
+
+
+def _other_supervisor_pids() -> list[int]:
+    """Find other run_unattended.py processes (venv or system Python)."""
+    me = os.getpid()
+    out: list[int] = []
+    try:
+        r = subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-Command",
+                "Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | "
+                "Where-Object { $_.CommandLine -match 'run_unattended\\.py' } | "
+                "ForEach-Object { $_.ProcessId }",
+            ],
+            cwd=str(ROOT),
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        for line in (r.stdout or "").splitlines():
+            line = line.strip()
+            if line.isdigit():
+                pid = int(line)
+                if pid != me:
+                    out.append(pid)
+    except Exception:
+        pass
+    return out
+
+
+def _acquire_singleton() -> None:
+    """
+    Only one supervisor may run. Multiple copies kill ports 5000/5050
+    every few seconds and the engine never stays up long enough to trade.
+    """
+    LOCK.parent.mkdir(parents=True, exist_ok=True)
+    my_pid = os.getpid()
+    rivals = _other_supervisor_pids()
+    if rivals:
+        print(
+            "ERROR: another unattended supervisor already running "
+            f"(pid={', '.join(map(str, rivals))}).\n"
+            "Close that window / stop start_unattended.bat first. "
+            "Only ONE unattended copy is allowed.",
+            flush=True,
+        )
+        raise SystemExit(2)
+    if LOCK.exists():
+        try:
+            old = int((LOCK.read_text(encoding="utf-8") or "0").strip().split()[0])
+        except Exception:
+            old = 0
+        if old and old != my_pid:
+            try:
+                os.kill(old, 0)
+                alive = True
+            except OSError:
+                alive = False
+            if alive:
+                print(
+                    f"ERROR: lock held by pid={old}. Stop that supervisor first "
+                    f"or delete {LOCK} if stale.",
+                    flush=True,
+                )
+                raise SystemExit(2)
+    LOCK.write_text(f"{my_pid} {datetime.now(IST).isoformat()}\n", encoding="utf-8")
+
+
+def _release_singleton() -> None:
+    try:
+        if LOCK.exists():
+            cur = (LOCK.read_text(encoding="utf-8") or "").strip().split()[0]
+            if cur == str(os.getpid()):
+                LOCK.unlink(missing_ok=True)  # type: ignore[call-arg]
+    except Exception:
+        pass
 
 
 def _log(msg: str) -> None:
@@ -177,7 +256,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    _acquire_singleton()
     try:
         main()
     except KeyboardInterrupt:
         _log("supervisor stopped by user")
+    finally:
+        _release_singleton()
