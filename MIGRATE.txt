@@ -4,13 +4,14 @@ FoxtronTrade — migrate to a new laptop
 1) On the NEW laptop, extract this zip anywhere
    (example: D:\FoxtronTrade or C:\Users\You\FoxtronTrade)
 
-2) Double-click  FoxtronTrade.bat
-   - First run: installs Python deps into .venv (needs internet)
+2) Double-click  FoxtronTrade.bat  (preferred)
+   - First run: FoxtronTrade_Setup.bat creates .venv + installs deps (needs internet)
    - Needs Python 3.11–3.13 (3.12 recommended). 3.14+/3.15 often fail pip wheels.
    - If a suitable Python is missing, it tries winget install Python 3.12
    - Then starts 24×7 unattended mode
    - Dashboard: http://127.0.0.1:5050
    - If setup failed once: delete the .venv folder, install Python 3.12, run again
+   - start_unattended.bat / restart.bat also auto-create .venv now (do not expect a prebuilt .venv)
 
 3) Double-click  FoxtronTrade.bat  again to STOP
 

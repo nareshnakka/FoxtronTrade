@@ -1,5 +1,5 @@
 @echo off
-setlocal
+setlocal EnableExtensions
 cd /d "%~dp0"
 
 echo === FoxtronTrade UNATTENDED 24x7 ===
@@ -8,18 +8,21 @@ echo Dashboard: http://127.0.0.1:5050
 echo Leave this window open. Ctrl+C stops supervisor.
 echo.
 
-REM Reduce sleep while plugged in (best-effort; may need admin)
+call "%~dp0FoxtronTrade_Setup.bat"
+if errorlevel 1 (
+  echo.
+  echo SETUP FAILED — install Python 3.12 then retry:
+  echo   winget install -e --id Python.Python.3.12
+  echo Or use FoxtronTrade.bat
+  pause
+  exit /b 1
+)
+
 powercfg /change standby-timeout-ac 0 >nul 2>&1
 powercfg /change monitor-timeout-ac 0 >nul 2>&1
 
 set "PYTHONPATH=%~dp0"
 set "PY=%~dp0.venv\Scripts\python.exe"
-
-if not exist "%PY%" (
-  echo ERROR: venv not found at "%PY%"
-  pause
-  exit /b 1
-)
 
 echo Stopping any old process on ports 5050 / 5000...
 powershell -NoProfile -Command ^
@@ -27,6 +30,8 @@ powershell -NoProfile -Command ^
 timeout /t 2 /nobreak >nul
 
 "%PY%" run_unattended.py
-
-endlocal
+set "EC=%ERRORLEVEL%"
+echo.
+echo Supervisor exited code %EC%
 pause
+exit /b %EC%
