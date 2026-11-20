@@ -13,8 +13,9 @@ Only 4 bats (use these):
 2) Put your .env here (Kite API + TOTP). access_token.json optional.
 
 3) Double-click  Setup.bat  once
-   - Downloads Python 3.12 into runtime\Python312 if needed (no admin)
-   - Creates .venv and installs packages
+   - If no Python 3.11-3.13: downloads official embeddable Python zip into runtime\Python312
+     (no admin, no EXE installer — just extract)
+   - Creates .venv when possible, else uses portable Python directly
    - Restores options DB from data\option_chain_live\chain.db.zip
 
 4) Double-click  Start.bat
