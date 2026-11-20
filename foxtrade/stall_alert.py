@@ -82,11 +82,36 @@ def _log(msg: str) -> None:
 
 
 def _hb_age() -> float | None:
+    """Process pulse age (any write)."""
     try:
         data = json.loads(HB_PATH.read_text(encoding="utf-8"))
         return max(0.0, time.time() - float(data["ts"]))
     except Exception:
         return None
+
+
+_last_good_tick: float | None = None
+
+
+def _tick_age() -> float | None:
+    """Engine-loop age — pulse must NOT mask a hung trading thread.
+
+    A torn or missing heartbeat file must not look like death. Keep the last
+    good tick time so one bad read cannot fire ENGINE DIED.
+    """
+    global _last_good_tick
+    try:
+        data = json.loads(HB_PATH.read_text(encoding="utf-8"))
+        ts = data.get("tick_ts")
+        if ts is None and not data.get("pulse"):
+            ts = data.get("ts")
+        if ts is not None:
+            _last_good_tick = float(ts)
+    except Exception:
+        pass
+    if _last_good_tick is None:
+        return None
+    return max(0.0, time.time() - _last_good_tick)
 
 
 def _data_age() -> float | None:
@@ -124,8 +149,39 @@ def _soft_restart_engine() -> dict[str, Any]:
         return {"ok": False, "need_relaunch": True, "detail": str(exc)}
 
 
+def _live_or_open() -> tuple[bool, int]:
+    """True if live trading ON or any OPEN trade — never hard-kill in that case."""
+    try:
+        from foxtrade.config_store import load_config
+        from foxtrade import trade_store
+
+        live = bool(load_config().get("live_trading"))
+        n = len(trade_store.open_trades())
+        return (live or n > 0), n
+    except Exception:
+        return False, 0
+
+
 def _full_relaunch(reason: str) -> None:
-    """Spawn detached relauncher then exit this process so ports free cleanly."""
+    """Spawn detached relauncher then exit this process so ports free cleanly.
+
+    HARD RULE: never process-kill during live trading or while OPEN positions exist.
+    Soft-restart only — a mid-live os._exit orphans risk and loses the book.
+    """
+    protect, opens = _live_or_open()
+    if protect:
+        _log(
+            f"RELAUNCH BLOCKED (live/open={opens}) reason={reason} — soft recover only"
+        )
+        try:
+            res = _soft_restart_engine()
+            _log(f"protected soft restart={res}")
+        except Exception as exc:  # noqa: BLE001
+            _log(f"protected soft restart failed: {exc}")
+        with _lock:
+            _state["last_restart_ts"] = time.time()
+        return
+
     py = str(ROOT / ".venv" / "Scripts" / "python.exe")
     if not Path(py).exists():
         py = sys.executable
@@ -162,21 +218,46 @@ def _loop(
     last_link_probe = 0.0
     link_down = False
     link_reason = ""
+    dead_strikes = 0
+    boot_ts = time.time()
 
     while not _stop.wait(5.0):
         # Always armed (including nights) — WiFi cut must still voice-alert
-        age = _hb_age()
+        pulse_age = _hb_age()
+        age = _tick_age()  # hung tick while pulse alive = engine_dead
         dage = _data_age()
-        engine_dead = age is None or age > max_hb_age
+        # First minute: no tick file yet is boot, not death.
+        # Two polls in a row (≈10s) must agree before a restart.
+        raw_dead = age is None or age > max_hb_age
+        if time.time() - boot_ts < 60 and age is None:
+            raw_dead = False
+        if raw_dead:
+            dead_strikes += 1
+        else:
+            dead_strikes = 0
+        engine_dead = dead_strikes >= 2
         warm = (time.time() - float(_state.get("last_restart_ts") or time.time())) < 45
 
+        # After 15:40 / weekend: engine is reports-only — don't probe Zerodha or alert on stale LTP.
+        kite_idle = False
+        try:
+            from foxtrade.engine import ENGINE, kite_idle_now
+
+            kite_idle = bool(ENGINE.is_kite_idle()) or kite_idle_now(ENGINE.config)
+        except Exception:
+            kite_idle = False
+
         # Active link probe every 12s (catches WiFi off even if last LTP looks "recent")
-        if time.time() - last_link_probe >= 12.0:
+        if not kite_idle and time.time() - last_link_probe >= 12.0:
             last_link_probe = time.time()
             link_down, link_reason = _probe_link_down()
+        elif kite_idle:
+            link_down, link_reason = False, "kite_idle"
 
         data_stale = False
-        if not warm:
+        if kite_idle:
+            data_stale = False
+        elif not warm:
             if link_down:
                 data_stale = True
                 if dage is None:
@@ -190,6 +271,7 @@ def _loop(
         with _lock:
             muted = bool(_state["muted"])
             _state["hb_age"] = age
+            _state["pulse_age"] = pulse_age
             _state["data_age"] = dage
             _state["link_down"] = link_down
             _state["link_reason"] = link_reason
@@ -197,7 +279,7 @@ def _loop(
         # ---- Engine recovery ----
         if not engine_dead:
             if engine_incident:
-                _log(f"engine recovered hb_age={age:.0f}s")
+                _log(f"engine recovered hb_age={0 if age is None else age:.0f}s")
                 voice_alert.stop("engine_died")
                 voice_alert.clear_cooldown("engine_died")
             engine_incident = False
@@ -211,49 +293,76 @@ def _loop(
                 _state["reason"] = (
                     "no_heartbeat" if age is None else f"stale_{age:.0f}s"
                 )
-            if not muted and not engine_incident:
+            # Mute silences voice only. A hung tick must still soft-restart,
+            # or the dashboard stays on ENGINE DIED until someone reloads.
+            if not engine_incident:
                 engine_incident = True
-                _log(f"ENGINE DIED — voice {voice_sec:.0f}s once + restart ({_state['reason']})")
                 with _lock:
-                    _state["last_engine_voice_ts"] = time.time()
-                    _state["beep_count"] = int(_state["beep_count"]) + 1
-                voice_alert.speak_for(
-                    "engine_died",
-                    "Engine died. Restarting.",
-                    duration_sec=voice_sec,
-                )
+                    last_voice = float(_state.get("last_engine_voice_ts") or 0)
+                    restarts = int(_state.get("restart_count") or 0)
+                voice_gap = time.time() - last_voice
+                should_voice = (not muted) and voice_gap >= 600.0
+                if should_voice:
+                    _log(
+                        f"ENGINE DIED — voice {voice_sec:.0f}s + soft restart "
+                        f"({_state['reason']}) restarts={restarts}"
+                    )
+                    with _lock:
+                        _state["last_engine_voice_ts"] = time.time()
+                        _state["beep_count"] = int(_state["beep_count"]) + 1
+                    voice_alert.speak_for(
+                        "engine_died",
+                        "Engine died. Restarting.",
+                        duration_sec=min(15.0, float(voice_sec)),
+                    )
+                else:
+                    _log(
+                        f"ENGINE STALE — silent soft restart ({_state['reason']}) "
+                        f"muted={muted} restarts={restarts}"
+                    )
                 res = _soft_restart_engine()
                 with _lock:
                     _state["last_restart_ts"] = time.time()
                     _state["restart_count"] = int(_state["restart_count"]) + 1
                 _log(f"soft restart result={res}")
+                # Soft restart always orphans+respawns now. Only process-relaunch
+                # if soft path itself failed AND we are NOT live/OPEN.
                 if res.get("need_relaunch"):
                     with _lock:
                         _state["relaunch_count"] = int(_state["relaunch_count"]) + 1
                     _full_relaunch(f"thread_hung:{res.get('detail')}")
-                # If still dead shortly after soft restart → full relaunch (no more voice)
-                time.sleep(min(20.0, max(8.0, restart_cooldown * 0.35)))
-                age2 = _hb_age()
-                if age2 is None or age2 > max_hb_age:
-                    with _lock:
-                        last_rl = float(_state["last_restart_ts"] or 0)
-                        can_rl = time.time() - last_rl >= restart_cooldown
-                    if can_rl:
+                else:
+                    # Give new generation time to tick; retry soft only if still dead
+                    time.sleep(min(20.0, max(8.0, restart_cooldown * 0.35)))
+                    age2 = _tick_age()
+                    if age2 is None or age2 > max_hb_age:
+                        _log(f"still stale after soft (tick_age={age2}) — soft retry")
+                        res2 = _soft_restart_engine()
                         with _lock:
-                            _state["relaunch_count"] = int(_state["relaunch_count"]) + 1
-                        _full_relaunch(f"engine_frozen_hb_{age2}")
+                            _state["last_restart_ts"] = time.time()
+                            _state["restart_count"] = int(_state["restart_count"]) + 1
+                        _log(f"soft retry result={res2}")
+                        if res2.get("need_relaunch"):
+                            with _lock:
+                                _state["relaunch_count"] = int(_state["relaunch_count"]) + 1
+                            _full_relaunch(f"engine_frozen_hb_{age2}")
             elif engine_incident:
-                # Already voiced once this incident — keep trying silent relaunch if needed
+                # Already voiced — keep soft-recovering; process kill only via _full_relaunch guard
                 with _lock:
                     last_rl = float(_state["last_restart_ts"] or 0)
                     can_rl = time.time() - last_rl >= restart_cooldown
                 if can_rl:
-                    age2 = _hb_age()
+                    age2 = _tick_age()
                     if age2 is None or age2 > max_hb_age:
                         with _lock:
                             _state["last_restart_ts"] = time.time()
-                            _state["relaunch_count"] = int(_state["relaunch_count"]) + 1
-                        _full_relaunch(f"engine_still_down_{age2}")
+                            _state["restart_count"] = int(_state["restart_count"]) + 1
+                        res2 = _soft_restart_engine()
+                        _log(f"silent soft recover tick_age={age2} result={res2}")
+                        if res2.get("need_relaunch"):
+                            with _lock:
+                                _state["relaunch_count"] = int(_state["relaunch_count"]) + 1
+                            _full_relaunch(f"engine_still_down_{age2}")
 
         # ---- Zerodha data freshness (only when engine itself is alive) ----
         if engine_dead:

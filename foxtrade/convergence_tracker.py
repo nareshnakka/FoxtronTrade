@@ -13,8 +13,18 @@ from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from foxtrade.atm_diag_merge_lock import (
+    chain_merge_ok,
+    cross_atm_x_ok,
+    pick_highest_band_pair,
+)
 from foxtrade.late_start import dig_day_history, is_late_start
-from foxtrade.scanner import expiry_allowed_for_entry, is_converged, scan_premium_band
+from foxtrade.scanner import (
+    expiry_allowed_for_entry,
+    is_converged,
+    resolve_atm_wing_instruments,
+    scan_premium_band,
+)
 
 IST = ZoneInfo("Asia/Kolkata")
 
@@ -64,7 +74,7 @@ def score_pair_merge(
     score += max(0.0, 25.0 - gap)  # tighter gap → higher
 
     if pair.get("same_strike"):
-        score += 35.0  # always prefer lockable same-strike over cross-premium match
+        score += 10.0  # mild tie-break only; high-mid convergence must win
 
     idx = index or {}
     strike = pair.get("strike")
@@ -144,34 +154,44 @@ def _build_all_pairs(
                 seen.add(pid)
                 pairs.append(p)
 
-    # 2) cross-strike same expiry (premium-matched) — fill if few same-strike
-    if len(pairs) < 4:
-        for exp, sides in by_exp.items():
-            for ce in sides["CE"]:
-                for pe in sides["PE"]:
-                    if float(ce["strike"]) == float(pe["strike"]):
-                        continue
-                    gap = abs(ce["ltp"] - pe["ltp"])
-                    mid = (ce["ltp"] + pe["ltp"]) / 2
-                    if not (low <= mid <= high):
-                        continue
-                    if gap > 25:
-                        continue
-                    p = {
-                        "expiry": exp,
-                        "strike": None,
-                        "ce": dict(ce),
-                        "pe": dict(pe),
-                        "gap": round(gap, 2),
-                        "mid": round(mid, 2),
-                        "same_strike": False,
-                    }
-                    pid = _pair_id(p)
-                    if pid not in seen:
-                        seen.add(pid)
-                        pairs.append(p)
+    # 2) cross-strike same expiry (premium-matched) — always included.
+    # The 125–145 band is usually hit by OTM legs at different strikes, so this
+    # is the realistic convergence set, not a fallback.
+    for exp, sides in by_exp.items():
+        for ce in sides["CE"]:
+            for pe in sides["PE"]:
+                if float(ce["strike"]) == float(pe["strike"]):
+                    continue
+                gap = abs(ce["ltp"] - pe["ltp"])
+                mid = (ce["ltp"] + pe["ltp"]) / 2
+                if not (low <= mid <= high):
+                    continue
+                if gap > 25:
+                    continue
+                p = {
+                    "expiry": exp,
+                    "strike": None,
+                    "ce": dict(ce),
+                    "pe": dict(pe),
+                    "gap": round(gap, 2),
+                    "mid": round(mid, 2),
+                    "same_strike": False,
+                    "ce_strike": float(ce["strike"]),
+                    "pe_strike": float(pe["strike"]),
+                }
+                pid = _pair_id(p)
+                if pid not in seen:
+                    seen.add(pid)
+                    pairs.append(p)
 
-    pairs.sort(key=lambda x: (0 if x.get("same_strike") else 1, x["gap"]))
+    # Highest merge first so downstream ranking sees the best pair first.
+    pairs.sort(
+        key=lambda x: (
+            -(x.get("mid") or 0) if x.get("gap", 99) <= 5 else 0,
+            x["gap"],
+            0 if x.get("same_strike") else 1,
+        )
+    )
     return pairs
 
 
@@ -189,6 +209,131 @@ class ConvergenceTracker:
     locked_merge: bool = False  # hold best merge/S-R pick until decay or mid leaves band
     late_report: dict[str, Any] | None = None
     _late_dig_done: bool = False
+    wing_instruments: list[dict[str, Any]] = field(default_factory=list)
+    merge_gate: dict[str, Any] = field(default_factory=dict)
+    _wing_atm: int | None = None
+
+    def _refresh_wing(self, atm: int | float | None, cfg: dict[str, Any]) -> None:
+        if atm is None:
+            return
+        atm_i = int(round(float(atm) / 50) * 50)
+        if self._wing_atm == atm_i and self.wing_instruments:
+            return
+        depth = int(cfg.get("atm_diag_wing_depth", 2))
+        exp = self.last_scan_meta.get("current_expiry")
+        try:
+            self.wing_instruments = resolve_atm_wing_instruments(
+                atm_i, expiry=exp, depth=depth
+            )
+            self._wing_atm = atm_i
+        except Exception:
+            self.wing_instruments = []
+
+    def _eval_merge_gate(
+        self, quotes: dict[str, float], cfg: dict[str, Any], atm: int | float | None
+    ) -> dict[str, Any]:
+        if not cfg.get("atm_diag_merge_gate_enabled", True):
+            gate = {"ok": True, "reason": "gate disabled", "enabled": False}
+            self.merge_gate = gate
+            return gate
+        if atm is None:
+            # derive from spot quote if present
+            spot = quotes.get("NSE:NIFTY 50") or quotes.get("NIFTY 50")
+            if spot is None and self.last_scan_meta.get("spot") is not None:
+                spot = self.last_scan_meta.get("spot")
+            if spot is not None:
+                atm = round(float(spot) / 50) * 50
+        if atm is None:
+            gate = {"ok": False, "reason": "no ATM/spot yet", "enabled": True}
+            self.merge_gate = gate
+            return gate
+        atm_i = int(round(float(atm) / 50) * 50)
+        self._refresh_wing(atm_i, cfg)
+        legs: dict[str, Any] = {}
+        for w in self.wing_instruments:
+            sym = w["tradingsymbol"]
+            px = quotes.get(sym)
+            if px is None and w.get("ltp") is not None:
+                px = w.get("ltp")
+            if px is None:
+                continue
+            w["ltp"] = float(px)
+            strike = int(float(w["strike"]))
+            legs[f"{w['instrument_type']}:{strike}"] = {
+                "c": float(px),
+                "ltp": float(px),
+                "sym": sym,
+            }
+        # also fold universe premiums for band pick
+        for u in self.universe:
+            sym = u.get("tradingsymbol")
+            px = quotes.get(sym) if sym else None
+            if px is None:
+                px = u.get("ltp")
+            if px is None or u.get("strike") is None:
+                continue
+            legs[f"{u['instrument_type']}:{int(float(u['strike']))}"] = {
+                "c": float(px),
+                "ltp": float(px),
+                "sym": sym,
+            }
+        gate = chain_merge_ok(
+            atm=atm_i,
+            legs=legs,
+            atm_tol=float(cfg.get("atm_diag_atm_tol", 3.0)),
+            diag_tol=float(cfg.get("atm_diag_diag_tol", 5.0)),
+            diag_depths=tuple(range(1, int(cfg.get("atm_diag_wing_depth", 2)) + 1)),
+            require_itm=bool(cfg.get("atm_diag_require_itm", False)),
+        )
+        gate["enabled"] = True
+        gate["atm"] = atm_i
+        gate["legs_n"] = len(legs)
+        # Always expose ATM premiums for lean side-confirm (even if diagonals not merged)
+        if gate.get("ce_atm") is None:
+            ce_atm_leg = legs.get(f"CE:{atm_i}")
+            pe_atm_leg = legs.get(f"PE:{atm_i}")
+            if ce_atm_leg and pe_atm_leg:
+                gate["ce_atm"] = float(ce_atm_leg.get("c") or ce_atm_leg.get("ltp") or 0) or None
+                gate["pe_atm"] = float(pe_atm_leg.get("c") or pe_atm_leg.get("ltp") or 0) or None
+                if gate["ce_atm"] == 0:
+                    gate["ce_atm"] = None
+                if gate["pe_atm"] == 0:
+                    gate["pe_atm"] = None
+        band_lo = float(cfg.get("premium_low", 125))
+        band_hi = float(cfg.get("premium_high", 145))
+        equal_tol = float(cfg.get("atm_diag_equal_tol", 3.0))
+        if gate.get("ok"):
+            pair = pick_highest_band_pair(
+                legs=legs,
+                band_lo=band_lo,
+                band_hi=band_hi,
+                equal_tol=equal_tol,
+            )
+            gate["pick"] = pair
+        else:
+            gate["pick"] = None
+            # Expiry→next-week: if ATM same-strike not merged, still try cross-ATM X
+            if cfg.get("atm_diag_cross_x_enabled", True):
+                x_gate = cross_atm_x_ok(
+                    atm=atm_i,
+                    legs=legs,
+                    step=50,
+                    tol=float(cfg.get("atm_diag_cross_x_tol", equal_tol)),
+                    depths=tuple(
+                        int(x)
+                        for x in (cfg.get("atm_diag_cross_x_depths") or [1, 2, 3, 4])
+                    ),
+                    band_lo=band_lo,
+                    band_hi=band_hi,
+                )
+                gate["cross_x"] = x_gate
+                if x_gate.get("ok") and x_gate.get("pair"):
+                    gate["ok"] = True
+                    gate["reason"] = x_gate.get("reason")
+                    gate["pick"] = x_gate["pair"]
+                    gate["via"] = "cross_atm_x"
+        self.merge_gate = gate
+        return gate
 
     def bootstrap(self, cfg: dict[str, Any], *, dig_history: bool = True) -> dict[str, Any]:
         """Full rescan — load strikes; if late login, dig day history from 09:15."""
@@ -291,8 +436,10 @@ class ConvergenceTracker:
             "pair_count": len(self.pairs),
             "late_start": late,
         }
+        self._refresh_wing(scan.get("atm"), cfg)
 
         if not self.active and self.pairs:
+            # Gate checked on first quotes tick; bootstrap may preselect tentatively
             self._select_best(low, high, reason="bootstrap best merge/S-R")
         elif self.active:
             self._refresh_active_quotes()
@@ -431,7 +578,16 @@ class ConvergenceTracker:
                 self._select_best(low, high, reason="late dig out-of-band — live 125–145 merge")
 
     def instruments_to_watch(self) -> list[dict[str, Any]]:
-        return list(self.universe)
+        by_sym = {u["tradingsymbol"]: u for u in self.universe}
+        for w in self.wing_instruments:
+            by_sym.setdefault(w["tradingsymbol"], w)
+        if self.active:
+            for leg in ("ce", "pe"):
+                x = self.active.get(leg) or {}
+                sym = x.get("tradingsymbol")
+                if sym and sym not in by_sym:
+                    by_sym[sym] = x
+        return list(by_sym.values())
 
     def on_quotes(
         self,
@@ -512,6 +668,11 @@ class ConvergenceTracker:
 
         self.locked_for_trade = not trade_flat
 
+        # Always evaluate ATM+diagonal gate (UI + selection)
+        atm_now = idx.get("atm") or self.last_scan_meta.get("atm") or self._wing_atm
+        gate = self._eval_merge_gate(quotes, cfg, atm_now)
+        equal_tol = float(cfg.get("atm_diag_equal_tol", max(tol, 3.0)))
+
         # Never keep / trade today's expiry as active (expiry-day → next week)
         if self.active and not expiry_allowed_for_entry(
             self.active.get("expiry") or (self.active.get("ce") or {}).get("expiry"),
@@ -522,6 +683,16 @@ class ConvergenceTracker:
             self.active_id = None
             self.locked_merge = False
             self.switch_reason = "dropped expiry-day active — select next week"
+
+        # No merge lock before algo2_merge_after (default 09:20 IST)
+        merge_after = str(cfg.get("algo2_merge_after") or "09:20")
+        now_hm = datetime.now(IST).strftime("%H:%M")
+        if now_hm < merge_after and not self.locked_for_trade:
+            self.active = None
+            self.active_id = None
+            self.locked_merge = False
+            self.switch_reason = f"wait merge after {merge_after} (now {now_hm})"
+            return self.snapshot(cfg)
 
         if self.locked_for_trade:
             self._refresh_active_from_list()
@@ -548,7 +719,10 @@ class ConvergenceTracker:
                         f"mid {better.get('mid')}"
                     )
                     return self.snapshot(cfg)
-            self.switch_reason = "locked — trade open on active pair"
+            self.switch_reason = (
+                "locked — trade open on active pair"
+                + (f" · gate {'OK' if gate.get('ok') else 'WAIT'}" if gate.get("enabled") is not False else "")
+            )
             return self.snapshot(cfg)
 
         # Mark active as decayed if requested
@@ -559,100 +733,214 @@ class ConvergenceTracker:
             self.active_id = None
             self.locked_merge = False
 
-        # Multiple merges in range → lock highest merge / S-R same-strike set
         alive = [p for p in self.pairs if p["id"] not in self.decayed_ids]
-        in_band = [p for p in alive if (low - 5) <= p.get("mid", 0) <= (high + 5)]
-        same_band = [p for p in in_band if p.get("same_strike")]
-        converged = [p for p in in_band if p.get("converged")]
-        near_merge = [p for p in in_band if p.get("gap", 99) <= max(tol * 3, 8)]
-        # Prefer same-strike: converged → near-merge → best in-band (S/R + high mid)
-        candidates = (
-            [p for p in converged if p.get("same_strike")]
-            or [p for p in near_merge if p.get("same_strike")]
-            or same_band
-            or converged
-            or near_merge
-        )
-        if candidates:
-            top = max(candidates, key=lambda p: (p.get("merge_score") or 0, -p.get("gap", 99)))
-            cur = next((p for p in self.pairs if p["id"] == self.active_id), None) if self.active_id else None
-            # Hold locked merge unless challenger clearly better (+12) or current left band
+        in_band = [p for p in alive if low <= p.get("mid", 0) <= high]
+        near_equal = [p for p in in_band if p.get("gap", 99) <= equal_tol]
+        # Prefer gate pick if it maps to a known pair
+        gate_pick = gate.get("pick") if gate.get("ok") else None
+        top = None
+        if gate.get("ok") and near_equal:
+            top = max(near_equal, key=lambda p: (p.get("mid") or 0, -(p.get("gap") or 99)))
+            if gate_pick:
+                # Prefer exact CE/PE strikes from pick when present in pairs
+                matched = next(
+                    (
+                        p
+                        for p in near_equal
+                        if int(float(p.get("ce_strike") or p.get("strike") or 0))
+                        == int(gate_pick.get("ce_strike") or -1)
+                        and int(float(p.get("pe_strike") or p.get("strike") or 0))
+                        == int(gate_pick.get("pe_strike") or -1)
+                    ),
+                    None,
+                )
+                if matched:
+                    top = matched
+                elif abs(float(top.get("mid") or 0) - float(gate_pick.get("mid") or 0)) > 1.0:
+                    # Build synthetic cross-strike pair from universe if needed
+                    ce_u = next(
+                        (
+                            u
+                            for u in self.universe
+                            if u.get("instrument_type") == "CE"
+                            and int(float(u.get("strike") or 0)) == int(gate_pick["ce_strike"])
+                        ),
+                        None,
+                    )
+                    pe_u = next(
+                        (
+                            u
+                            for u in self.universe
+                            if u.get("instrument_type") == "PE"
+                            and int(float(u.get("strike") or 0)) == int(gate_pick["pe_strike"])
+                        ),
+                        None,
+                    )
+                    if ce_u and pe_u:
+                        syn = {
+                            "expiry": ce_u.get("expiry"),
+                            "strike": None,
+                            "ce": dict(ce_u),
+                            "pe": dict(pe_u),
+                            "gap": gate_pick["gap"],
+                            "mid": gate_pick["mid"],
+                            "same_strike": False,
+                            "ce_strike": gate_pick["ce_strike"],
+                            "pe_strike": gate_pick["pe_strike"],
+                            "converged": True,
+                            "merge_score": 200.0,
+                        }
+                        syn["id"] = _pair_id(syn)
+                        top = syn
+
+        cur = next((p for p in self.pairs if p["id"] == self.active_id), None) if self.active_id else None
+        if cur is None and self.active:
+            cur = self.active
+
+        gate_required = bool(cfg.get("atm_diag_merge_gate_required", False))
+        if not gate.get("ok") and gate_required:
+            # Legacy: wait for ATM+diagonal merge before any band lock
+            if self.locked_merge and cur and (low - 10) <= cur.get("mid", 0) <= (high + 10):
+                self.active = cur
+                self.switch_reason = (
+                    f"holding lock — waiting re-merge ({gate.get('reason')})"
+                )
+            else:
+                self.locked_merge = False
+                self.switch_reason = f"scan wait: {gate.get('reason') or 'ATM+diag not merged'}"
+            return self.snapshot(cfg)
+
+        # Soft / trained path: lock clear 125–145 band merge even if ATM still wide
+        if not gate.get("ok") and top is None and near_equal:
+            top = max(near_equal, key=lambda p: (p.get("mid") or 0, -(p.get("gap") or 99)))
+        if not gate.get("ok") and top is None:
+            band_pick = pick_highest_band_pair(
+                legs={
+                    f"{u.get('instrument_type')}:{int(float(u.get('strike') or 0))}": {
+                        "c": float(u.get("ltp") or 0),
+                        "sym": u.get("tradingsymbol") or "",
+                    }
+                    for u in self.universe
+                    if u.get("instrument_type") in ("CE", "PE") and u.get("ltp") is not None
+                },
+                band_lo=low,
+                band_hi=high,
+                equal_tol=equal_tol,
+            )
+            if band_pick:
+                ce_u = next(
+                    (
+                        u
+                        for u in self.universe
+                        if u.get("instrument_type") == "CE"
+                        and int(float(u.get("strike") or 0)) == int(band_pick["ce_strike"])
+                    ),
+                    None,
+                )
+                pe_u = next(
+                    (
+                        u
+                        for u in self.universe
+                        if u.get("instrument_type") == "PE"
+                        and int(float(u.get("strike") or 0)) == int(band_pick["pe_strike"])
+                    ),
+                    None,
+                )
+                if ce_u and pe_u:
+                    top = {
+                        "expiry": ce_u.get("expiry"),
+                        "strike": None,
+                        "ce": dict(ce_u),
+                        "pe": dict(pe_u),
+                        "gap": band_pick["gap"],
+                        "mid": band_pick["mid"],
+                        "same_strike": False,
+                        "ce_strike": band_pick["ce_strike"],
+                        "pe_strike": band_pick["pe_strike"],
+                        "converged": True,
+                        "merge_score": 180.0,
+                    }
+                    top["id"] = _pair_id(top)
+
+        if top is not None:
             hold = bool(
                 self.locked_merge
                 and cur
-                and cur["id"] not in self.decayed_ids
+                and cur.get("id") not in self.decayed_ids
                 and (low - 10) <= cur.get("mid", 0) <= (high + 10)
-                and (cur.get("merge_score") or 0) + 12 >= (top.get("merge_score") or 0)
+                and abs(float(cur.get("mid") or 0) - float(top.get("mid") or 0)) < 8
             )
+            how = "ATM+diag" if gate.get("ok") else "band"
             if hold:
                 self.active = cur
                 self.switch_reason = (
-                    f"locked merge K{cur.get('strike')} mid {cur.get('mid')} "
-                    f"gap {cur.get('gap')} score {cur.get('merge_score')}"
+                    f"{how} LOCK mid {cur.get('mid')} gap {cur.get('gap')} "
+                    f"CE{cur.get('ce_strike') or cur.get('strike')} / "
+                    f"PE{cur.get('pe_strike') or cur.get('strike')}"
                 )
                 return self.snapshot(cfg)
 
-            if self.active_id != top["id"]:
+            self.active = top
+            self.active_id = top.get("id") or _pair_id(top)
+            top["id"] = self.active_id
+            self.locked_merge = True
+            self.switch_reason = (
+                f"{how} LOCK mid {top.get('mid')} gap {top.get('gap')} "
+                f"CE{top.get('ce_strike') or top.get('strike')}@"
+                f"{(top.get('ce') or {}).get('ltp')} "
+                f"PE{top.get('pe_strike') or top.get('strike')}@"
+                f"{(top.get('pe') or {}).get('ltp')}"
+            )
+            return self.snapshot(cfg)
+
+        # Gate OK but no near-equal in-band pair yet — try synthetic from pick
+        if gate.get("ok") and gate_pick and top is None:
+            ce_u = next(
+                (
+                    u
+                    for u in self.universe
+                    if u.get("instrument_type") == "CE"
+                    and int(float(u.get("strike") or 0)) == int(gate_pick["ce_strike"])
+                ),
+                None,
+            )
+            pe_u = next(
+                (
+                    u
+                    for u in self.universe
+                    if u.get("instrument_type") == "PE"
+                    and int(float(u.get("strike") or 0)) == int(gate_pick["pe_strike"])
+                ),
+                None,
+            )
+            if ce_u and pe_u:
+                top = {
+                    "expiry": ce_u.get("expiry"),
+                    "strike": None,
+                    "ce": dict(ce_u),
+                    "pe": dict(pe_u),
+                    "gap": gate_pick["gap"],
+                    "mid": gate_pick["mid"],
+                    "same_strike": False,
+                    "ce_strike": gate_pick["ce_strike"],
+                    "pe_strike": gate_pick["pe_strike"],
+                    "converged": True,
+                    "merge_score": 200.0,
+                }
+                top["id"] = _pair_id(top)
                 self.active = top
                 self.active_id = top["id"]
                 self.locked_merge = True
-                why = "highest merge" if len(candidates) > 1 else "merge"
-                sr = ""
-                if idx.get("support") is not None or idx.get("resistance") is not None:
-                    sr = f" S/R~{idx.get('support')}/{idx.get('resistance')}"
                 self.switch_reason = (
-                    f"{why}: K{top.get('strike')} mid {top.get('mid')} "
-                    f"gap {top.get('gap')} score {top.get('merge_score')}{sr}"
+                    f"ATM+diag LOCK mid {top['mid']} gap {top['gap']} "
+                    f"CE{top['ce_strike']} PE{top['pe_strike']}"
                 )
-            else:
-                self.active = top
-                self.locked_merge = True
-                self.switch_reason = (
-                    f"holding merge K{top.get('strike')} mid {top.get('mid')} "
-                    f"score {top.get('merge_score')}"
-                )
-            return self.snapshot(cfg)
+                return self.snapshot(cfg)
 
-        # Not converged yet — stick with scored best unless mid left / much better appears
-        if self.active_id:
-            cur = next((p for p in self.pairs if p["id"] == self.active_id), None)
-            if cur is None:
-                self.active = None
-                self.active_id = None
-                self.locked_merge = False
-                self.switch_reason = "active pair left universe — reselect"
-            else:
-                mid_ok = (low - 10) <= cur["mid"] <= (high + 10)
-                best = next((p for p in self.pairs if p["id"] not in self.decayed_ids), None)
-                if not mid_ok or cur["id"] in self.decayed_ids:
-                    self.decayed_ids.add(cur["id"])
-                    self.active = None
-                    self.active_id = None
-                    self.locked_merge = False
-                    self.switch_reason = "active mid left band / decayed — switch"
-                elif (
-                    best
-                    and best["id"] != cur["id"]
-                    and (best.get("merge_score") or 0) >= (cur.get("merge_score") or 0) + 15
-                ):
-                    self.active = best
-                    self.active_id = best["id"]
-                    self.locked_merge = False
-                    self.switch_reason = (
-                        f"switch better set K{best.get('strike')} "
-                        f"score {best.get('merge_score')} > {cur.get('merge_score')}"
-                    )
-                else:
-                    self.active = cur
-                    self.switch_reason = (
-                        f"tracking K{cur.get('strike')} gap {cur['gap']} "
-                        f"score {cur.get('merge_score')}"
-                    )
-                    return self.snapshot(cfg)
-
-        if not self.active:
-            self._select_best(low, high, reason="select best merge/S-R non-decayed", index=idx)
-
+        self.switch_reason = (
+            f"ATM+diag merge OK but no near-equal pair in {low:g}–{high:g} "
+            f"(tol {equal_tol:g})"
+        )
         return self.snapshot(cfg)
 
     def _select_best(
@@ -721,6 +1009,7 @@ class ConvergenceTracker:
             "tracked_legs": len(self.universe),
             "tracked_pairs": len(self.pairs),
             "locked_merge": self.locked_merge,
+            "merge_gate": self.merge_gate,
             "band": {"low": low, "high": high},
             "late_start": self.last_scan_meta.get("late_start"),
             "late_report": self.late_report,

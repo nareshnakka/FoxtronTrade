@@ -164,7 +164,9 @@ def _fut_oi_bias() -> dict[str, Any]:
         sym = _FUT_CACHE.get("symbol") if _FUT_CACHE.get("day") == today else None
         if not sym:
             try:
-                instruments = kite.instruments("NFO")
+                from foxtrade.kite_cache import get_instruments
+
+                instruments = get_instruments("NFO")
             except Exception:
                 return out
             futs = [

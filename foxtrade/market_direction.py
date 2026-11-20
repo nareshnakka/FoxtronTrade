@@ -312,12 +312,21 @@ def analyze_market(
         or sr_ok
     )
     if not cfg.get("require_structure_event", True):
-        quality = quality or bool(
-            trend.get("block_counter_trend")
-            and trend.get("prefer_side") == side
-            and abs(vs_open) >= hard
-            and mins >= int(cfg.get("trend_confirm_minutes", 20))
-        )
+        # Loose mode: accept directional side without waiting for ORB/shake
+        if cfg.get("loose_entry_mode", False):
+            quality = True
+        else:
+            quality = quality or bool(
+                trend.get("block_counter_trend")
+                and trend.get("prefer_side") == side
+                and abs(vs_open) >= hard
+                and mins >= int(cfg.get("trend_confirm_minutes", 20))
+            )
+            # Also allow soft trend + momentum alignment without hard structure
+            quality = quality or bool(
+                trend.get("prefer_side") == side
+                and abs(float(vs_open or 0)) >= float(cfg.get("min_vs_open_entry", 15))
+            )
     if not quality:
         allow = False
         tags.append("wait structure (break/shake)")
@@ -679,22 +688,54 @@ def pick_leg_for_side(
     premium_low: float = 125,
     premium_high: float = 145,
     prefer_mid: float | None = None,
+    atm: float | None = None,
+    max_premium: float | None = None,
 ) -> dict[str, Any] | None:
-    """Pick one option on the chosen side inside (or nearest) premium band."""
+    """Pick one option on the chosen side.
+
+    When `atm` is supplied (default live path), the strike nearest the money
+    wins. The fixed premium band is a fallback only — a static 125-145 band
+    skips high-IV days entirely and otherwise picks a non-ATM strike whose
+    delta does not match the backtest's 0.5 assumption.
+    """
     side = side.upper()
     mid = prefer_mid if prefer_mid is not None else (premium_low + premium_high) / 2
+
+    if atm is not None:
+        near: list[tuple[float, int, float, dict[str, Any]]] = []
+        for leg in legs:
+            if str(leg.get("instrument_type") or leg.get("type") or "").upper() != side:
+                sym = str(leg.get("tradingsymbol") or "")
+                if not sym.endswith(side):
+                    continue
+            ltp = leg.get("ltp")
+            strike = leg.get("strike")
+            if ltp is None or strike is None:
+                continue
+            px = float(ltp)
+            if px <= 0:
+                continue
+            if max_premium is not None and px > float(max_premium):
+                continue
+            dist = abs(float(strike) - float(atm))
+            in_band = premium_low <= px <= premium_high
+            near.append((dist, 0 if in_band else 1, abs(px - mid), leg))
+        if near:
+            near.sort(key=lambda x: (x[0], x[1], x[2]))
+            return near[0][3]
+
     cands = []
     for leg in legs:
         if str(leg.get("instrument_type") or leg.get("type") or "").upper() != side:
             sym = str(leg.get("tradingsymbol") or "")
             if not sym.endswith(side):
                 continue
-        else:
-            sym = str(leg.get("tradingsymbol") or "")
         ltp = leg.get("ltp")
         if ltp is None:
             continue
         px = float(ltp)
+        if max_premium is not None and px > float(max_premium):
+            continue
         # Prefer inside band; allow slight overflow
         if px < premium_low - 15 or px > premium_high + 25:
             continue

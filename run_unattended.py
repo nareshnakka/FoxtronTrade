@@ -28,10 +28,12 @@ HEARTBEAT = ROOT / "data" / "heartbeat.json"
 LOG = ROOT / "data" / "unattended.log"
 LOCK = ROOT / "data" / "unattended.lock"
 
-# Heartbeat older than this → treat engine as frozen
-MAX_HB_AGE = 90.0
+# Heartbeat older than this → treat engine as frozen.
+# Keep high: engine may do slow Kite work; independent hb pulse keeps ts fresh.
+# LIVE/OPEN path refuses kill entirely (see main loop).
+MAX_HB_AGE = 180.0
 # Don't restart more often than this
-MIN_RESTART_GAP = 45.0
+MIN_RESTART_GAP = 60.0
 # How often supervisor checks
 CHECK_EVERY = 10.0
 
@@ -39,6 +41,7 @@ CHECK_EVERY = 10.0
 def _other_supervisor_pids() -> list[int]:
     """Find other run_unattended.py processes (venv or system Python)."""
     me = os.getpid()
+    parent = os.getppid()
     out: list[int] = []
     try:
         r = subprocess.run(
@@ -47,7 +50,7 @@ def _other_supervisor_pids() -> list[int]:
                 "-NoProfile",
                 "-Command",
                 "Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" | "
-                "Where-Object { $_.CommandLine -match 'run_unattended\\.py' } | "
+                "Where-Object { $_.CommandLine -and ($_.CommandLine -like '*run_unattended.py*') } | "
                 "ForEach-Object { $_.ProcessId }",
             ],
             cwd=str(ROOT),
@@ -59,8 +62,16 @@ def _other_supervisor_pids() -> list[int]:
             line = line.strip()
             if line.isdigit():
                 pid = int(line)
-                if pid != me:
-                    out.append(pid)
+                # venv python.exe is a launcher; its child is the real interpreter.
+                # Do not treat that parent as a second supervisor.
+                if pid in (me, parent):
+                    continue
+                # Verify still alive — PowerShell can race with exiting shells
+                try:
+                    os.kill(pid, 0)
+                except OSError:
+                    continue
+                out.append(pid)
     except Exception:
         pass
     return out
@@ -139,7 +150,13 @@ def _ensure_login(tag: str) -> None:
     try:
         sys.path.insert(0, str(ROOT))
         from foxtrade.auto_login import auto_login_configured, ensure_kite_session
+        from foxtrade.config_store import load_config
+        from foxtrade.engine import kite_idle_now
 
+        # After 15:40 IST / weekend — no Zerodha login needed (reports-only).
+        if kite_idle_now(load_config()):
+            _log(f"[{tag}] kite idle after 15:40 — skip login (reports still served)")
+            return
         if not auto_login_configured():
             _log(f"[{tag}] auto-login not configured — set KITE_USER_ID/PASSWORD/TOTP_SECRET in .env")
             return
@@ -174,6 +191,9 @@ def _start_app() -> subprocess.Popen:
     env["PYTHONPATH"] = str(ROOT)
     env["PYTHONUNBUFFERED"] = "1"
     py = str(PY if PY.exists() else sys.executable)
+    # NOTE: On Windows, venv's python.exe is a launcher that spawns the base
+    # Local\Programs\Python\...\python.exe as a child. Do NOT kill "system"
+    # python app.py copies — that murders the live interpreter.
     _log(f"starting {py} app.py")
     return subprocess.Popen(
         [py, str(APP)],
@@ -217,6 +237,31 @@ def main() -> None:
 
         if need_start or frozen:
             why = "dead" if need_start else ("frozen" if age and age > MAX_HB_AGE else "no_heartbeat")
+
+            # LIVE SAFETY: never kill a running app while live trading or OPEN positions.
+            # Heartbeat pulse + soft stall recovery handle freezes without wiping the book.
+            protect = False
+            open_n = 0
+            try:
+                sys.path.insert(0, str(ROOT))
+                from foxtrade.config_store import load_config
+                from foxtrade import trade_store
+
+                protect = bool(load_config().get("live_trading"))
+                open_n = len(trade_store.open_trades())
+                if open_n > 0:
+                    protect = True
+            except Exception:
+                pass
+
+            if frozen and protect and proc and proc.poll() is None:
+                _log(
+                    f"FROZEN but LIVE/OPEN({open_n}) — NOT killing pid={proc.pid} "
+                    f"hb_age={age} (waiting for pulse/soft recovery)"
+                )
+                time.sleep(CHECK_EVERY)
+                continue
+
             # Voice alert ~60s (non-blocking) before / during restart
             try:
                 sys.path.insert(0, str(ROOT))

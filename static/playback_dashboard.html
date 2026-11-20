@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FoxtronTrade — Algo Playback</title>
+  <script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    :root {
+      --bg: #0b1017; --panel: #141c27; --line: #243041; --text: #e8eef7;
+      --muted: #8fa0b8; --accent: #3d9cf0; --up: #26a69a; --down: #ef5350; --warn: #f0b429;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg); color: var(--text);
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    header {
+      display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center;
+      padding: 8px 12px; background: var(--panel); border-bottom: 1px solid var(--line);
+      flex-shrink: 0; z-index: 5;
+    }
+    h1 { font-size: 1rem; margin: 0; }
+    .badge {
+      font-size: 0.72rem; padding: 3px 8px; border-radius: 999px;
+      border: 1px solid var(--line); color: var(--muted);
+    }
+    .badge.play { color: #fff; background: var(--accent); border-color: var(--accent); }
+    .grow { flex: 1; }
+    button, select {
+      background: #1c2736; color: var(--text); border: 1px solid var(--line);
+      border-radius: 6px; padding: 8px 12px; font-size: 0.85rem; cursor: pointer;
+    }
+    button:hover { border-color: var(--accent); }
+    button.ok { background: #163328; border-color: #2a6; font-weight: 650; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    a { color: var(--accent); }
+    main {
+      flex: 1; min-height: 0;
+      display: flex; flex-direction: column; gap: 8px; padding: 8px 10px;
+    }
+    .status {
+      flex-shrink: 0;
+      display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: baseline;
+      padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    }
+    .status .phase { font-weight: 700; color: var(--warn); }
+    .status .msg { color: var(--muted); font-size: 0.85rem; flex: 1; min-width: 120px; }
+    .ce { color: var(--down); } .pe { color: var(--up); }
+    .chart-wrap {
+      flex: 1; min-height: 200px; position: relative;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    }
+    #chart { position: absolute; inset: 0; }
+    /* Always visible control bar — never clipped by chart */
+    .controls {
+      flex-shrink: 0;
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+      padding: 12px 14px;
+      background: #1a2433; border: 2px solid var(--accent); border-radius: 10px;
+      box-shadow: 0 -4px 24px rgba(0,0,0,0.35);
+    }
+    .controls label { color: var(--muted); font-size: 0.8rem; display: flex; gap: 6px; align-items: center; }
+    input[type=range] { flex: 1; min-width: 140px; accent-color: var(--accent); }
+    .net { font-size: 1.05rem; font-weight: 700; }
+    .net.pos { color: var(--up); } .net.neg { color: var(--down); }
+    .side {
+      flex-shrink: 0; max-height: 140px; overflow: auto;
+      background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px 8px;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    th, td { border-bottom: 1px solid var(--line); padding: 4px 6px; text-align: left; }
+    th { color: var(--muted); font-weight: 600; }
+    .day-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+    .day-tabs button.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .calib {
+      flex-shrink: 0;
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      padding: 8px 12px; background: #1a2030; border: 1px solid var(--warn);
+      border-radius: 8px; font-size: 0.82rem;
+    }
+    .calib .title { color: var(--warn); font-weight: 700; margin-right: 4px; }
+    .calib .sum { color: var(--muted); flex: 1; min-width: 160px; }
+    .calib button.mark { padding: 6px 10px; }
+    .calib button.ce { border-color: var(--down); }
+    .calib button.pe { border-color: var(--up); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Algo Playback</h1>
+    <span class="badge play">1m · live algo auto-replay</span>
+    <div class="day-tabs" id="dayTabs"></div>
+    <span class="badge" id="sumBadge">—</span>
+    <div class="grow"></div>
+    <a href="/backtest">Backtest</a>
+    <a href="/playback/week">Week report</a>
+    <a href="/">Live dashboard</a>
+  </header>
+  <main>
+    <div class="status">
+      <span id="clock">09:15</span>
+      <span class="phase" id="phase">SCAN</span>
+      <span class="ce" id="cePx">CE —</span>
+      <span class="pe" id="pePx">PE —</span>
+      <span id="strikes">—</span>
+      <span id="candle">—</span>
+      <span id="gate">GATE —</span>
+      <span class="msg" id="msg">loading…</span>
+      <span class="net" id="mtm">MTM —</span>
+    </div>
+    <div class="chart-wrap"><div id="chart"></div></div>
+    <div class="calib" id="calibBar">
+      <span class="title">Calibrate</span>
+      <button class="mark" type="button" id="lblMergeStart" title="Stamp scrub time as merge start">Merge start</button>
+      <button class="mark" type="button" id="lblMergeEnd" title="Stamp scrub time as merge end">Merge end</button>
+      <button class="mark ce" type="button" id="lblBreakCe" title="Breakout CE at scrub time">Break CE</button>
+      <button class="mark pe" type="button" id="lblBreakPe" title="Breakout PE at scrub time">Break PE</button>
+      <span class="sum" id="lblSum">no label</span>
+      <button class="ok" type="button" id="lblSave">Save</button>
+      <button type="button" id="lblClear">Clear</button>
+    </div>
+    <div class="controls" id="controlsBar">
+      <button class="ok" id="btnPlay" type="button">▶ Play</button>
+      <button id="btnStep" type="button">Step +1m</button>
+      <button id="btnBack" type="button">−1m</button>
+      <button id="btnReset" type="button">Reset</button>
+      <label>Speed
+        <select id="speed">
+          <option value="1000">1×</option>
+          <option value="400" selected>2.5×</option>
+          <option value="200">5×</option>
+          <option value="50">20×</option>
+          <option value="16">60×</option>
+        </select>
+      </label>
+      <input type="range" id="scrub" min="0" max="0" value="0" />
+      <span id="idxLabel">0/0</span>
+      <div class="grow"></div>
+      <span class="net" id="dayNet">NET —</span>
+    </div>
+    <div class="side">
+      <div class="meta" style="margin:8px 0 4px;font-size:12px;opacity:.85">Playback — current algo (merge ≥ 09:20 · band 125–145)</div>
+      <table>
+        <thead><tr><th>Side</th><th>Strike</th><th>Symbol</th><th>Role</th><th>In</th><th>Entry</th><th>Out</th><th>Exit</th><th>PnL</th><th>Reason</th></tr></thead>
+        <tbody id="tradesBody"></tbody>
+      </table>
+      <div class="meta" style="margin:14px 0 4px;font-size:12px;opacity:.85">Live/paper that day — historical (not re-run under new rules)</div>
+      <table>
+        <thead><tr><th>Side</th><th>Strike</th><th>Symbol</th><th>Role</th><th>In</th><th>Entry</th><th>Out</th><th>Exit</th><th>PnL</th><th>Reason</th></tr></thead>
+        <tbody id="liveTradesBody"></tbody>
+      </table>
+    </div>
+  </main>
+<script>
+const params = new URLSearchParams(location.search);
+let day = params.get("day") || "";
+let sim = null;
+let idx = 0;
+let timer = null;
+let playing = false;
+let chart = null;
+let ceSeries, peSeries, tgtLo, tgtHi, pipeHi, pipeMid, pipeLo;
+let ceChHi, ceChLo, peChHi, peChLo, ceFill, peFill;
+let label = {
+  day: "",
+  merge_start: null,
+  merge_end: null,
+  break_t: null,
+  break_side: null,
+  notes: "",
+};
+
+function scrubTime() {
+  if (!sim?.frames?.length) return null;
+  return sim.frames[Math.max(0, Math.min(idx, sim.frames.length - 1))]?.t || null;
+}
+
+function renderLabelSum() {
+  const el = document.getElementById("lblSum");
+  if (!el) return;
+  const parts = [];
+  if (label.merge_start) parts.push(`merge ${label.merge_start}`);
+  if (label.merge_end) parts.push(`→ ${label.merge_end}`);
+  if (label.break_t || label.break_side) {
+    parts.push(`break ${label.break_side || "?"} @ ${label.break_t || "?"}`);
+  }
+  el.textContent = parts.length ? parts.join(" · ") : "no label — scrub then stamp";
+}
+
+async function loadLabel() {
+  if (!day) return;
+  try {
+    const r = await fetch(`/api/playback/labels/${day}`);
+    const j = await r.json();
+    label = {
+      day,
+      merge_start: j.merge_start || null,
+      merge_end: j.merge_end || null,
+      break_t: j.break_t || null,
+      break_side: j.break_side || null,
+      notes: j.notes || "",
+    };
+  } catch (_) {
+    label = { day, merge_start: null, merge_end: null, break_t: null, break_side: null, notes: "" };
+  }
+  renderLabelSum();
+}
+
+async function saveLabel() {
+  if (!day) return;
+  label.day = day;
+  const r = await fetch(`/api/playback/labels/${day}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(label),
+  });
+  const j = await r.json();
+  if (!r.ok) {
+    document.getElementById("msg").textContent = j.error || "save failed";
+    return;
+  }
+  document.getElementById("msg").textContent = `label saved for ${day}`;
+  renderLabelSum();
+}
+
+async function clearLabel() {
+  if (!day) return;
+  await fetch(`/api/playback/labels/${day}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ clear: true }),
+  });
+  label = { day, merge_start: null, merge_end: null, break_t: null, break_side: null, notes: "" };
+  renderLabelSum();
+  document.getElementById("msg").textContent = `label cleared for ${day}`;
+}
+
+function initChart() {
+  const el = document.getElementById("chart");
+  chart = LightweightCharts.createChart(el, {
+    layout: { background: { color: "#141c27" }, textColor: "#8fa0b8" },
+    grid: { vertLines: { color: "#243041" }, horzLines: { color: "#243041" } },
+    rightPriceScale: { borderColor: "#243041" },
+    timeScale: { borderColor: "#243041", timeVisible: true, secondsVisible: false },
+    width: el.clientWidth,
+    height: el.clientHeight,
+  });
+  ceSeries = chart.addLineSeries({ color: "#ef5350", lineWidth: 2 });
+  peSeries = chart.addLineSeries({ color: "#26a69a", lineWidth: 2 });
+  pipeHi = chart.addLineSeries({ color: "rgba(239,83,80,0.95)", lineWidth: 2 });
+  pipeMid = chart.addLineSeries({
+    color: "rgba(239,83,80,0.45)", lineWidth: 1, lineStyle: LightweightCharts.LineStyle.Dotted,
+  });
+  pipeLo = chart.addLineSeries({ color: "rgba(239,83,80,0.95)", lineWidth: 2 });
+  // Parallel Call (red) + Put (teal) channels — solid rails + soft fill
+  ceFill = chart.addAreaSeries({
+    topColor: "rgba(198,40,40,0.18)",
+    bottomColor: "rgba(198,40,40,0.02)",
+    lineColor: "rgba(198,40,40,0.01)",
+    lineWidth: 1,
+    priceLineVisible: false,
+    lastValueVisible: false,
+  });
+  peFill = chart.addAreaSeries({
+    topColor: "rgba(0,105,92,0.18)",
+    bottomColor: "rgba(0,105,92,0.02)",
+    lineColor: "rgba(0,105,92,0.01)",
+    lineWidth: 1,
+    priceLineVisible: false,
+    lastValueVisible: false,
+  });
+  ceChHi = chart.addLineSeries({
+    color: "#c62828", lineWidth: 2, priceLineVisible: false, lastValueVisible: false,
+  });
+  ceChLo = chart.addLineSeries({
+    color: "#c62828", lineWidth: 2, priceLineVisible: false, lastValueVisible: false,
+  });
+  peChHi = chart.addLineSeries({
+    color: "#00695c", lineWidth: 2, priceLineVisible: false, lastValueVisible: false,
+  });
+  peChLo = chart.addLineSeries({
+    color: "#00695c", lineWidth: 2, priceLineVisible: false, lastValueVisible: false,
+  });
+  tgtLo = chart.addLineSeries({ color: "rgba(240,180,41,0.45)", lineWidth: 1, lineStyle: 2 });
+  tgtHi = chart.addLineSeries({ color: "rgba(240,180,41,0.45)", lineWidth: 1, lineStyle: 2 });
+  for (const lvl of [125, 145]) {
+    ceSeries.createPriceLine({
+      price: lvl, color: "#4b5d75", lineWidth: 1,
+      lineStyle: LightweightCharts.LineStyle.Dashed,
+      axisLabelVisible: true, title: "band",
+    });
+  }
+  new ResizeObserver(() => {
+    if (!chart) return;
+    chart.applyOptions({ width: el.clientWidth, height: el.clientHeight });
+  }).observe(el);
+}
+
+function toTime(dayStr, hm) {
+  const [y, m, d] = dayStr.split("-").map(Number);
+  const [hh, mm] = hm.split(":").map(Number);
+  return Math.floor(Date.UTC(y, m - 1, d, hh, mm) / 1000);
+}
+
+function setControlsEnabled(on) {
+  for (const id of ["btnPlay", "btnStep", "btnBack", "btnReset", "scrub", "speed"]) {
+    const el = document.getElementById(id);
+    if (el) el.disabled = !on;
+  }
+}
+
+async function loadDays() {
+  const r = await fetch("/api/playback/week");
+  const w = await r.json();
+  const days = w.available_days || (w.days || []).map((x) => x.day).filter(Boolean);
+  const tabs = document.getElementById("dayTabs");
+  tabs.innerHTML = "";
+  if (!days.length) {
+    document.getElementById("msg").textContent = "No playback days — run tools_playback_week.py";
+    setControlsEnabled(false);
+    return days;
+  }
+  if (!day || !days.includes(day)) day = days[days.length - 1];
+  days.forEach((d) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = d.slice(5); // MM-DD
+    b.title = d;
+    if (d === day) b.classList.add("active");
+    b.onclick = () => {
+      if (d === day) return;
+      pause();
+      day = d;
+      history.replaceState(null, "", `?day=${day}`);
+      [...tabs.children].forEach((c) => c.classList.toggle("active", c.title === day));
+      loadSim();
+    };
+    tabs.appendChild(b);
+  });
+  const mode = w.mode || "algo";
+  document.getElementById("sumBadge").textContent =
+    `week NET ₹${w.net ?? "—"} · ${days.length} days · ${mode}` +
+    (w.algo_fp ? ` · ${String(w.algo_fp).slice(0, 8)}` : "");
+  return days;
+}
+
+async function loadSim() {
+  pause();
+  setControlsEnabled(false);
+  document.getElementById("msg").textContent = `loading ${day}…`;
+  const r = await fetch(`/api/playback/${day}`);
+  if (!r.ok) {
+    sim = null;
+    document.getElementById("msg").textContent = `no sim for ${day}`;
+    return;
+  }
+  sim = await r.json();
+  idx = 0;
+  const n = (sim.frames || []).length;
+  document.getElementById("scrub").max = Math.max(0, n - 1);
+  document.getElementById("scrub").value = 0;
+  document.getElementById("dayNet").textContent = `NET ₹${sim.summary?.net ?? "—"}`;
+  document.getElementById("dayNet").className =
+    `net ${(sim.summary?.net || 0) >= 0 ? "pos" : "neg"}`;
+  if (sim.auto_replay) {
+    document.getElementById("sumBadge").title =
+      `auto-replay fp ${sim.algo_fp || ""} · mode ${sim.mode || sim.summary?.mode || ""}`;
+  }
+  const rowHtml = (t) => {
+    const strike =
+      t.strike != null && t.strike !== ""
+        ? `${t.side || ""}${t.strike}`
+        : "—";
+    const sym = t.symbol || t.sym || "—";
+    return (
+      `<tr><td>${t.side || ""}</td><td>${strike}</td><td title="${sym}">${sym}</td>` +
+      `<td>${t.role || ""}</td><td>${t.entry_t || ""}</td><td>${t.entry ?? ""}</td>` +
+      `<td>${t.exit_t || ""}</td><td>${t.exit ?? ""}</td>` +
+      `<td>${t.pnl ?? t.net ?? ""}</td><td>${t.reason || ""}</td></tr>`
+    );
+  };
+  document.getElementById("tradesBody").innerHTML =
+    (sim.trades || []).map(rowHtml).join("") ||
+    `<tr><td colspan="10">no playback trades</td></tr>`;
+  document.getElementById("liveTradesBody").innerHTML =
+    (sim.live_paper_trades || [])
+      .map((t) => rowHtml({ ...t, role: t.role || "live_paper" }))
+      .join("") || `<tr><td colspan="10">no live/paper fills this day</td></tr>`;
+  setControlsEnabled(n > 0);
+  await loadLabel();
+  render();
+}
+
+function render() {
+  if (!sim || !sim.frames?.length) return;
+  idx = Math.max(0, Math.min(idx, sim.frames.length - 1));
+  const f = sim.frames[idx];
+  document.getElementById("clock").textContent = f.t;
+  document.getElementById("phase").textContent = f.phase || "—";
+  document.getElementById("cePx").textContent =
+    f.ce != null ? `CE ${Number(f.ce).toFixed(1)}` : "CE —";
+  document.getElementById("pePx").textContent =
+    f.pe != null ? `PE ${Number(f.pe).toFixed(1)}` : "PE —";
+  const cCe = f.chart_ce_strike ?? f.chart_strike ?? f.atm;
+  const cPe = f.chart_pe_strike ?? f.chart_strike ?? f.atm;
+  document.getElementById("strikes").textContent =
+    f.ce_strike != null || f.pe_strike != null
+      ? `lock CE${f.ce_strike ?? "—"}/PE${f.pe_strike ?? "—"} · chart CE${cCe}/PE${cPe}`
+      : (cCe != null ? `chart CE${cCe}/PE${cPe}` : "—");
+  document.getElementById("candle").textContent = f.candle ? `1m ${f.candle}` : "";
+  document.getElementById("gate").textContent = f.gate_ok ? "GATE OK" : "GATE WAIT";
+  document.getElementById("gate").style.color = f.gate_ok ? "#26a69a" : "#f0b429";
+  document.getElementById("msg").textContent = f.message || "";
+  const mtm = (f.open_legs || []).reduce((a, l) => a + (l.mtm || 0), 0);
+  document.getElementById("mtm").textContent = `MTM ₹${mtm.toFixed(0)}`;
+  document.getElementById("mtm").className = `net ${mtm >= 0 ? "pos" : "neg"}`;
+  document.getElementById("scrub").value = String(idx);
+  document.getElementById("idxLabel").textContent = `${idx + 1}/${sim.frames.length}`;
+
+  const ceData = [], peData = [], lo = [], hi = [];
+  const pipePts = [];
+  const ceHi = [], ceLo = [], peHi = [], peLo = [];
+  const ceMid = [], peMid = [];
+  const tLo = Number(f.tgt_lo ?? 168);
+  const tHi = Number(f.tgt_hi ?? 175);
+  for (let i = 0; i <= idx; i++) {
+    const x = sim.frames[i];
+    const tm = toTime(sim.day, x.t);
+    if (x.ce != null) ceData.push({ time: tm, value: x.ce });
+    if (x.pe != null) peData.push({ time: tm, value: x.pe });
+    lo.push({ time: tm, value: tLo });
+    hi.push({ time: tm, value: tHi });
+    if (x.pipe_high != null && x.pipe_mid != null && x.pipe_low != null) {
+      pipePts.push({
+        time: tm,
+        high: x.pipe_high,
+        mid: x.pipe_mid,
+        low: x.pipe_low,
+      });
+    }
+    const cHi = x.ce_ch_hi ?? x.tl_w_dn;
+    const cLo = x.ce_ch_lo ?? x.tl_up;
+    const pHi = x.pe_ch_hi ?? x.tl_down;
+    const pLo = x.pe_ch_lo ?? x.tl_f_up;
+    if (cHi != null) ceHi.push({ time: tm, value: cHi });
+    if (cLo != null) ceLo.push({ time: tm, value: cLo });
+    if (pHi != null) peHi.push({ time: tm, value: pHi });
+    if (pLo != null) peLo.push({ time: tm, value: pLo });
+    if (cHi != null && cLo != null) {
+      ceMid.push({ time: tm, value: (Number(cHi) + Number(cLo)) / 2 });
+    }
+    if (pHi != null && pLo != null) {
+      peMid.push({ time: tm, value: (Number(pHi) + Number(pLo)) / 2 });
+    }
+  }
+  const markers = [];
+  for (const t of (sim.trades || [])) {
+    if (t.entry_t) {
+      markers.push({
+        time: toTime(sim.day, t.entry_t),
+        position: "belowBar",
+        color: t.side === "CE" ? "#ef5350" : "#26a69a",
+        shape: "arrowUp",
+        text: `BUY ${t.side || ""}`,
+      });
+    }
+    if (t.exit_t) {
+      const sl = /SL|convergence/i.test(String(t.reason || ""));
+      markers.push({
+        time: toTime(sim.day, t.exit_t),
+        position: "aboveBar",
+        color: sl ? "#f0b429" : "#3d9cf0",
+        shape: "arrowDown",
+        text: sl ? "SL" : "BOOK",
+      });
+    }
+  }
+  markers.sort((a, b) => a.time - b.time);
+  try {
+    ceSeries.setData(ceData);
+    peSeries.setData(peData);
+    try { ceSeries.setMarkers(markers); } catch (_) {}
+    tgtLo.setData(lo);
+    tgtHi.setData(hi);
+    if (pipePts.length >= 2) {
+      pipeHi.setData(pipePts.map((p) => ({ time: p.time, value: p.high })));
+      pipeMid.setData(pipePts.map((p) => ({ time: p.time, value: p.mid })));
+      pipeLo.setData(pipePts.map((p) => ({ time: p.time, value: p.low })));
+    } else {
+      pipeHi.setData([]);
+      pipeMid.setData([]);
+      pipeLo.setData([]);
+    }
+    ceChHi.setData(ceHi);
+    ceChLo.setData(ceLo);
+    peChHi.setData(peHi);
+    peChLo.setData(peLo);
+    ceFill.setData(ceMid);
+    peFill.setData(peMid);
+  } catch (err) {
+    console.warn("chart setData", err);
+  }
+}
+
+function play() {
+  if (playing || !sim?.frames?.length) return;
+  playing = true;
+  document.getElementById("btnPlay").textContent = "⏸ Pause";
+  const tick = () => {
+    if (!playing) return;
+    if (idx >= sim.frames.length - 1) {
+      pause();
+      return;
+    }
+    idx += 1;
+    render();
+    const ms = Math.max(16, Number(document.getElementById("speed").value) || 400);
+    timer = setTimeout(tick, ms);
+  };
+  tick();
+}
+function pause() {
+  playing = false;
+  document.getElementById("btnPlay").textContent = "▶ Play";
+  if (timer) {
+    clearTimeout(timer);
+    timer = null;
+  }
+}
+
+document.getElementById("btnPlay").onclick = () => (playing ? pause() : play());
+document.getElementById("btnStep").onclick = () => {
+  pause();
+  idx += 1;
+  render();
+};
+document.getElementById("btnBack").onclick = () => {
+  pause();
+  idx = Math.max(0, idx - 1);
+  render();
+};
+document.getElementById("btnReset").onclick = () => {
+  pause();
+  idx = 0;
+  render();
+};
+document.getElementById("scrub").oninput = (e) => {
+  pause();
+  idx = Number(e.target.value);
+  render();
+};
+
+document.getElementById("lblMergeStart").onclick = () => {
+  pause();
+  label.merge_start = scrubTime();
+  renderLabelSum();
+};
+document.getElementById("lblMergeEnd").onclick = () => {
+  pause();
+  label.merge_end = scrubTime();
+  renderLabelSum();
+};
+document.getElementById("lblBreakCe").onclick = () => {
+  pause();
+  label.break_t = scrubTime();
+  label.break_side = "CE";
+  renderLabelSum();
+};
+document.getElementById("lblBreakPe").onclick = () => {
+  pause();
+  label.break_t = scrubTime();
+  label.break_side = "PE";
+  renderLabelSum();
+};
+document.getElementById("lblSave").onclick = () => saveLabel();
+document.getElementById("lblClear").onclick = () => clearLabel();
+
+initChart();
+loadDays().then(loadSim);
+</script>
+</body>
+</html>

@@ -5,6 +5,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 access_token.json
+access_token.json.*
 *.log
 .DS_Store
 data/trades.json
@@ -13,6 +14,13 @@ data/sensex/minutes/
 data/sensex/fut_oi/
 data/sensex/options/
 data/backtests/
+data/option_chain_live/
+data/relaunch.lock
+data/.migrate_restore_ok
+data/_state_snap.json
 # keep training_log / learning_state locally (optional commit)
 # data/training_log.jsonl
 # data/learning_state.json
+
+# LocalMode Agent memory
+.localmode/

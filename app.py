@@ -15,6 +15,7 @@ from foxtrade import trade_store
 from foxtrade.learner import learning_report, run_daily_learn
 from kite_client import (
     check_session,
+    clear_access_token,
     exchange_request_token,
     get_authenticated_kite,
     login_url,
@@ -34,17 +35,52 @@ def home():
 
 @app.get("/api/auth")
 def auth_status():
+    # Never force Kite profile on dashboard poll — that wedged Flask under load.
     try:
-        status = ENGINE.refresh_auth(force_profile=True)
+        status = ENGINE.refresh_auth(force_profile=False)
     except Exception:
-        status = check_session(force_profile=True)
+        status = check_session(force_profile=False)
     return jsonify(status)
 
 
 @app.get("/api/auth/login_url")
 def auth_login_url():
     try:
+        # User clicked Login — allow auto-login / callback to take effect again.
+        try:
+            ENGINE.clear_manual_logout()
+        except Exception:
+            pass
         return jsonify({"ok": True, "login_url": login_url()})
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
+@app.post("/api/auth/logout")
+def auth_logout():
+    """Clear local Kite access token and suppress unattended auto-login until Login again."""
+    try:
+        cleared = clear_access_token()
+        status = {
+            "ok": False,
+            "needs_login": True,
+            "reason": "logged_out",
+            "user_name": None,
+            "user_id": None,
+            "saved_at": None,
+            "login_url": None,
+            "logged_out": True,
+            "cleared": cleared,
+        }
+        try:
+            status["login_url"] = login_url()
+        except Exception:
+            pass
+        try:
+            ENGINE.apply_manual_logout(status)
+        except Exception:
+            pass
+        return jsonify(status)
     except Exception as exc:  # noqa: BLE001
         return jsonify({"ok": False, "error": str(exc)}), 500
 
@@ -62,6 +98,7 @@ def kite_callback():
     try:
         info = exchange_request_token(request_token)
         try:
+            ENGINE.clear_manual_logout()
             ENGINE.refresh_auth(force_profile=True)
         except Exception:
             pass
@@ -107,7 +144,7 @@ def start_port5000_callback_forwarder(dashboard_port: int = 5050) -> None:
             print(f"Port 5000 forwarder not started ({exc}). Set Kite Redirect URL to :5050 or free port 5000.")
 
     threading.Thread(target=_run, name="kite-5000-forward", daemon=True).start()
-    print("Kite callback forwarder → http://127.0.0.1:5000/callback  ⇒  :5050")
+    print("Kite callback forwarder -> http://127.0.0.1:5000/callback   ->   :5050")
 
 
 @app.get("/nifty")
@@ -118,6 +155,226 @@ def nifty_only():
 @app.get("/reports")
 def reports_page():
     return send_from_directory(app.static_folder, "reports.html")
+
+
+@app.get("/option-chain-filter")
+def option_chain_filter_page():
+    """Live SQLite chain capture — filter by date/time, ATM/ITM/OTM, LTP."""
+    return send_from_directory(app.static_folder, "option_chain_filter.html")
+
+
+@app.get("/option-chain")
+def option_chain_page_redirect():
+    """Old static pager removed — send users to live chain filter."""
+    return redirect("/option-chain-filter")
+
+
+@app.get("/atm-premiums")
+def atm_premiums_page():
+    return send_from_directory(app.static_folder, "atm_premium_chart.html")
+
+
+@app.get("/oi-convergence")
+def oi_convergence_page():
+    """Old static OI chart removed."""
+    return redirect("/option-chain-filter")
+
+
+@app.get("/merge-lock")
+def merge_lock_page():
+    """Old static merge-lock chart removed."""
+    return redirect("/option-chain-filter")
+
+
+@app.get("/playback")
+def playback_page():
+    return send_from_directory(app.static_folder, "playback_dashboard.html")
+
+
+@app.get("/playback/week")
+def playback_week_page():
+    """Fresh week index from live auto-replay (current algo)."""
+    from foxtrade.playback_auto import week_summary_live
+
+    try:
+        week = week_summary_live()
+    except Exception as exc:
+        return f"<p>Playback week error: {exc}</p>", 500
+    days = week.get("available_days") or []
+    mode = week.get("mode") or "algo"
+    rows = []
+    for d in days:
+        net = next((x.get("net") for x in (week.get("days") or []) if x.get("day") == d), 0)
+        rows.append(
+            f"<li><strong>{d}</strong> · net ₹{net} &nbsp; "
+            f"<a class='play' href='/playback?day={d}'>Play</a></li>"
+        )
+    return f"""<!doctype html>
+<html><head><meta charset="utf-8"/><title>Week playback</title>
+<style>
+body{{font-family:Segoe UI,system-ui,sans-serif;background:#0b1017;color:#e8eef7;margin:24px}}
+a{{color:#3d9cf0;text-decoration:none}}
+a.play{{display:inline-block;padding:8px 14px;background:#163328;border:1px solid #2a6;
+border-radius:8px;color:#e8eef7;font-weight:650}}
+li{{margin:14px 0;font-size:1.05rem}}
+</style></head><body>
+<h1>Week playback — {mode}</h1>
+<p>Auto-replay with current algo · fp {week.get('algo_fp','')}</p>
+<p>NET ₹{week.get('net')} · gross ₹{week.get('gross')} · charges ₹{week.get('charges')}</p>
+<ul>
+{chr(10).join(rows) or '<li>no chain days</li>'}
+</ul>
+<p><a href="/">Live dashboard</a></p>
+</body></html>"""
+
+
+@app.get("/playback/report/<day>")
+def playback_day_report(day: str):
+    path = ROOT / "data" / "backtests" / "playback" / day / "report.html"
+    if not path.exists():
+        return jsonify({"error": f"no report for {day}"}), 404
+    return path.read_text(encoding="utf-8")
+
+
+def _playback_labels_dir() -> Path:
+    d = ROOT / "data" / "backtests" / "labels"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _safe_day(day: str) -> str | None:
+    """YYYY-MM-DD only."""
+    if not day or len(day) != 10 or day[4] != "-" or day[7] != "-":
+        return None
+    try:
+        datetime.strptime(day, "%Y-%m-%d")
+    except ValueError:
+        return None
+    return day
+
+
+@app.get("/api/playback/labels")
+def playback_labels_list():
+    import json
+
+    out = []
+    for p in sorted(_playback_labels_dir().glob("*.json")):
+        try:
+            out.append(json.loads(p.read_text(encoding="utf-8")))
+        except Exception:
+            continue
+    return jsonify({"labels": out, "count": len(out)})
+
+
+@app.get("/api/playback/labels/<day>")
+def playback_labels_get(day: str):
+    import json
+
+    day = _safe_day(day)
+    if not day:
+        return jsonify({"error": "bad day"}), 400
+    path = _playback_labels_dir() / f"{day}.json"
+    if not path.exists():
+        return jsonify(
+            {
+                "day": day,
+                "merge_start": None,
+                "merge_end": None,
+                "break_t": None,
+                "break_side": None,
+                "notes": "",
+            }
+        )
+    return jsonify(json.loads(path.read_text(encoding="utf-8")))
+
+
+@app.post("/api/playback/labels/<day>")
+def playback_labels_post(day: str):
+    import json
+
+    day = _safe_day(day)
+    if not day:
+        return jsonify({"error": "bad day"}), 400
+    body = request.get_json(silent=True) or {}
+    payload = {
+        "day": day,
+        "merge_start": body.get("merge_start") or None,
+        "merge_end": body.get("merge_end") or None,
+        "break_t": body.get("break_t") or None,
+        "break_side": body.get("break_side") or None,
+        "notes": str(body.get("notes") or ""),
+    }
+    if payload["break_side"] not in (None, "CE", "PE"):
+        return jsonify({"error": "break_side must be CE|PE"}), 400
+    path = _playback_labels_dir() / f"{day}.json"
+    if body.get("clear"):
+        if path.exists():
+            path.unlink()
+        return jsonify({"ok": True, "cleared": True, "day": day})
+    path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    return jsonify({"ok": True, "label": payload})
+
+
+@app.get("/api/playback/week")
+def playback_week_api():
+    """Always resim available chain days with the *current* algo config."""
+    from foxtrade.playback_auto import week_summary_live
+
+    try:
+        return jsonify(week_summary_live())
+    except Exception as exc:
+        return jsonify({"available_days": [], "days": [], "net": None, "error": str(exc)})
+
+
+@app.get("/api/playback/<day>")
+def playback_day_api(day: str):
+    """Auto-replay this day with the latest algo config."""
+    day_ok = _safe_day(day)
+    if not day_ok:
+        return jsonify({"error": "bad day"}), 400
+    from foxtrade.playback_auto import available_chain_days, simulate_day_live
+
+    if day_ok not in available_chain_days():
+        return jsonify(
+            {
+                "error": f"no option_chain_1m viewer for {day_ok}",
+                "hint": "capture/export viewer.json under data/option_chain_1m/<day>/",
+            }
+        ), 404
+
+    sim = simulate_day_live(day_ok)
+    if sim.get("error") and not sim.get("frames"):
+        return jsonify(
+            {
+                "error": sim.get("error"),
+                "hint": "download option_chain_1m for this day",
+            }
+        ), 404
+    return jsonify(sim)
+
+
+@app.get("/api/merge_lock/<day>")
+def merge_lock_api(day: str):
+    """Deprecated static merge-lock viewer — use live chain filter."""
+    return jsonify(
+        {
+            "error": "static merge_lock removed",
+            "hint": "use /option-chain-filter (live capture DB)",
+            "day": day,
+        }
+    ), 410
+
+
+@app.get("/api/option_oi_1m/<day>")
+def option_oi_1m_api(day: str):
+    """Deprecated static OI CSV viewer — use live capture DB."""
+    return jsonify(
+        {
+            "error": "static option_oi_1m removed",
+            "hint": "use /option-chain-filter or /api/option_chain_db/live",
+            "day": day,
+        }
+    ), 410
 
 
 @app.get("/api/reports")
@@ -138,16 +395,20 @@ def reports_api():
     mode = (request.args.get("mode") or "combined").lower()
     date_from = request.args.get("from") or request.args.get("date_from")
     date_to = request.args.get("to") or request.args.get("date_to")
+    algo = (request.args.get("algo") or "all").lower()
     payload = trade_store.report_details()
     filtered = trade_store.report_filtered(
         mode=mode if mode in ("combined", "paper", "live") else "combined",
         date_from=date_from,
         date_to=date_to,
+        algo=None if algo in ("", "all", "combined") else algo,
     )
     payload["filter"] = filtered
-    if date_from or date_to:
+    payload["algo_filter"] = algo if algo not in ("", "combined") else "all"
+    if date_from or date_to or (algo and algo not in ("", "all", "combined")):
         payload["custom_range"] = {
             "mode": filtered.get("mode"),
+            "algo": filtered.get("algo"),
             "date_from": date_from,
             "date_to": date_to,
             "stats": filtered.get("stats"),
@@ -173,11 +434,210 @@ def state():
     return jsonify(ENGINE.dashboard_state())
 
 
+@app.get("/api/option_chain_db")
+def option_chain_db_status():
+    """Live current+next week chain recorder status + SQLite stats."""
+    try:
+        from foxtrade.option_chain_db import CHAIN_RECORDER
+
+        return jsonify(CHAIN_RECORDER.snapshot())
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.post("/api/option_chain_db/capture")
+def option_chain_db_capture():
+    """Toggle chain capture for today. New IST day always defaults ON."""
+    try:
+        from foxtrade.option_chain_db import CHAIN_RECORDER
+
+        body = request.get_json(force=True, silent=True) or {}
+        if "capturing" not in body:
+            return jsonify({"error": "capturing bool required"}), 400
+        return jsonify(CHAIN_RECORDER.set_capturing(bool(body.get("capturing"))))
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.get("/api/option_chain_db/days")
+def option_chain_db_days():
+    try:
+        from foxtrade.config_store import load_config
+        from foxtrade.option_chain_db import db_from_config
+
+        return jsonify({"days": db_from_config(load_config()).list_days()})
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"days": [], "error": str(exc)}), 500
+
+
+@app.get("/api/option_chain_db/times")
+def option_chain_db_times():
+    """
+    Paginated timestamps for a day.
+    Query: day, time_from?, time_to?, offset?, limit?,
+           week?, side?, moneyness?, depth?, ltp_min?, ltp_max?
+    """
+    try:
+        from foxtrade.config_store import load_config
+        from foxtrade.option_chain_db import db_from_config
+
+        day = str(request.args.get("day") or "").strip()
+        if not day:
+            return jsonify({"error": "day required"}), 400
+
+        def _f(name: str) -> float | None:
+            v = request.args.get(name)
+            if v is None or str(v).strip() == "":
+                return None
+            return float(v)
+
+        try:
+            offset = int(request.args.get("offset", "0"))
+        except ValueError:
+            offset = 0
+        try:
+            limit = int(request.args.get("limit", "100"))
+        except ValueError:
+            limit = 100
+        try:
+            depth = int(request.args.get("depth", "10"))
+        except ValueError:
+            depth = 10
+
+        payload = db_from_config(load_config()).list_timestamps(
+            day,
+            time_from=request.args.get("time_from") or None,
+            time_to=request.args.get("time_to") or None,
+            offset=offset,
+            limit=limit,
+            week=str(request.args.get("week") or "both"),
+            side=str(request.args.get("side") or "both"),
+            moneyness=str(request.args.get("moneyness") or "all"),
+            depth=depth,
+            ltp_min=_f("ltp_min"),
+            ltp_max=_f("ltp_max"),
+        )
+        payload["count"] = len(payload.get("times") or [])
+        return jsonify(payload)
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.get("/api/option_chain_db/live")
+def option_chain_db_live():
+    """Latest 1s-synced in-memory chain (DB still saves every 10s)."""
+    try:
+        from foxtrade.option_chain_db import CHAIN_RECORDER
+
+        def _f(name: str) -> float | None:
+            v = request.args.get(name)
+            if v is None or str(v).strip() == "":
+                return None
+            return float(v)
+
+        try:
+            depth = int(request.args.get("depth", "10"))
+        except ValueError:
+            depth = 10
+        return jsonify(
+            CHAIN_RECORDER.live_snapshot(
+                week=str(request.args.get("week") or "both"),
+                side=str(request.args.get("side") or "both"),
+                moneyness=str(request.args.get("moneyness") or "wing"),
+                depth=depth,
+                ltp_min=_f("ltp_min"),
+                ltp_max=_f("ltp_max"),
+            )
+        )
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.get("/api/option_chain_db/atm_premiums")
+def option_chain_db_atm_premiums():
+    """Live ATM CE/PE premium path for a day (from capture DB)."""
+    try:
+        from foxtrade.config_store import load_config
+        from foxtrade.option_chain_db import db_from_config
+
+        day = str(request.args.get("day") or "").strip()
+        if not day:
+            return jsonify({"error": "day required"}), 400
+        week = str(request.args.get("week") or "current")
+        snap = db_from_config(load_config()).atm_premium_series(
+            day,
+            week=week,
+            time_from=request.args.get("time_from") or None,
+            time_to=request.args.get("time_to") or None,
+        )
+        return jsonify(snap)
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.get("/api/option_chain_db/query")
+def option_chain_db_query():
+    """
+    Filter captured chain snapshot.
+    Query: day, ts?, time_from?, time_to?, week=both|current|next,
+           side=both|CE|PE, moneyness=wing|atm|itm|otm|all, depth=5|10,
+           ltp_min?, ltp_max?
+    """
+    try:
+        from foxtrade.config_store import load_config
+        from foxtrade.option_chain_db import db_from_config
+
+        day = str(request.args.get("day") or "").strip()
+        if not day:
+            return jsonify({"error": "day required"}), 400
+
+        def _f(name: str) -> float | None:
+            v = request.args.get(name)
+            if v is None or str(v).strip() == "":
+                return None
+            return float(v)
+
+        depth_raw = request.args.get("depth", "10")
+        try:
+            depth = int(depth_raw)
+        except ValueError:
+            depth = 10
+        snap = db_from_config(load_config()).query_snapshot(
+            day=day,
+            ts=request.args.get("ts") or None,
+            time_from=request.args.get("time_from") or None,
+            time_to=request.args.get("time_to") or None,
+            week=str(request.args.get("week") or "both"),
+            side=str(request.args.get("side") or "both"),
+            moneyness=str(request.args.get("moneyness") or "wing"),
+            depth=depth,
+            ltp_min=_f("ltp_min"),
+            ltp_max=_f("ltp_max"),
+        )
+        return jsonify(snap)
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.post("/api/engine/restart")
+def engine_restart():
+    """Soft-restart engine threads (never kills the process / live book)."""
+    body = request.get_json(force=True, silent=True) or {}
+    reason = str(body.get("reason") or "api")[:80]
+    return jsonify(ENGINE.restart(reason=reason))
+
+
 @app.post("/api/settings")
 def settings():
     body = request.get_json(force=True, silent=True) or {}
     cfg = save_config(body)
     ENGINE.reload_config()
+    try:
+        from foxtrade.playback_auto import invalidate_cache
+
+        invalidate_cache()
+    except Exception:
+        pass
     return jsonify(cfg)
 
 
@@ -236,23 +696,20 @@ def square_off():
 
 @app.get("/api/nifty_candles")
 def nifty_candles():
+    """Serve cached engine candles — never block Flask on Kite historical."""
     interval = request.args.get("interval", "5minute")
     try:
-        days = request.args.get("days")
-        if days:
-            # multi-day history for scrollable Nifty chart
-            from datetime import datetime, timedelta
-            from zoneinfo import ZoneInfo
-            from kite_client import get_authenticated_kite
-
-            IST = ZoneInfo("Asia/Kolkata")
-            to_dt = datetime.now(IST)
-            from_dt = to_dt - timedelta(days=max(1, min(int(days), 30)))
-            kite = get_authenticated_kite()
-            rows = kite.historical_data(256265, from_dt, to_dt, interval)
+        cached = (
+            ENGINE.market.nifty_candles_5m
+            if interval.startswith("5")
+            else ENGINE.market.nifty_candles_1m
+        )
+        if cached:
             candles = []
-            for row in rows:
-                dt = row["date"]
+            for row in cached:
+                dt = row.get("date")
+                if dt is None:
+                    continue
                 if getattr(dt, "tzinfo", None):
                     dt = dt.astimezone(IST)
                 candles.append(
@@ -264,9 +721,9 @@ def nifty_candles():
                         "close": float(row["close"]),
                     }
                 )
-            return jsonify({"candles": candles})
-        candles = ENGINE.market.nifty_day_candles(interval=interval)
-        return jsonify({"candles": candles})
+            if candles:
+                return jsonify({"candles": candles, "source": "cache"})
+        return jsonify({"candles": [], "source": "empty"})
     except Exception as exc:  # noqa: BLE001
         return jsonify({"error": str(exc), "candles": []}), 502
 
@@ -343,14 +800,17 @@ if __name__ == "__main__":
 
     _cfg = load_config()
     stall_alert.start(
-        max_age_sec=float(_cfg.get("heartbeat_max_age_sec", 90)),
+        max_age_sec=float(_cfg.get("heartbeat_max_age_sec", 120)),
         max_data_age_sec=float(_cfg.get("zerodha_data_max_age_sec", 45)),
-        voice_sec=float(_cfg.get("voice_alert_seconds", 30)),
+        voice_sec=float(_cfg.get("voice_alert_seconds", 10)),
         restart_cooldown_sec=float(_cfg.get("engine_restart_cooldown_sec", 60)),
     )
+    # Soft-recover stays on; voice muted at boot (dashboard Unmute). Stops spam.
+    stall_alert.mute()
     start_port5000_callback_forwarder(5050)
-    print("Dashboard → http://127.0.0.1:5050")
+    print("Dashboard --> http://127.0.0.1:5050")
     print("Live trading default OFF (paper).")
-    print("Stall watchdog ON — voice 60s + auto-restart if engine dies / Zerodha data stalls.")
+    print("Stall watchdog ON — silent soft-restart (voice muted; Unmute on dashboard).")
     print("If Kite Redirect URL is :5000, login callback is auto-forwarded to :5050.")
-    app.run(host="127.0.0.1", port=5050, debug=False, use_reloader=False)
+    # threaded=True — a slow /api/state must never block mute/stall/heartbeat probes
+    app.run(host="127.0.0.1", port=5050, debug=False, use_reloader=False, threaded=True)

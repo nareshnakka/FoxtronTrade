@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -18,6 +19,7 @@ from foxtrade.session_trend import (
     counter_trend_blocked,
 )
 from foxtrade.expert_filters import (
+    apply_entry_hold_gate,
     detect_opening_shakeout,
     evaluate_entry,
     size_lots,
@@ -50,6 +52,11 @@ from foxtrade.daily_pa import (
     daily_pa_lots,
     detect_daily_pa,
     spot_bank_hit as pa_spot_bank_hit,
+)
+from foxtrade.trend_follow import (
+    detect_trend_follow,
+    trend_follow_enabled,
+    trend_follow_should_exit_open,
 )
 from foxtrade.balanced import (
     hedge_enabled,
@@ -88,6 +95,7 @@ class Algo1State:
     pd_persist_side: str | None = None
     pd_persist_n: int = 0
     pd_persist_minute: str | None = None
+    trend_bias: str | None = None
 
 
 def _clock_minute() -> str:
@@ -213,6 +221,9 @@ class Algo1Breakout:
                 if vals:
                     spot_now = vals[-1]
         self._tick_spot = float(spot_now) if spot_now is not None else None
+        self._tick_spot_closes = list(
+            (ctx.get("index") or {}).get("spot_closes") or []
+        )
 
         # Keep CE/PE history + overlap zone even while managing an open trade
         if pair:
@@ -250,11 +261,20 @@ class Algo1Breakout:
                 self.state.entry_price = float(t.get("entry_price") or 0)
                 self.state.phase = "IN_TRADE"
                 px = quotes.get(sym)
+                fresh_fn = getattr(ctx.get("market"), "quote_fresh", None)
+                if px is not None and callable(fresh_fn) and not fresh_fn(sym):
+                    px = None
+                if px is None:
+                    # The 1s poller failed or dropped this leg: fetch a direct
+                    # LTP so stops/targets keep being enforced on the position.
+                    px = self._rest_ltp(sym, t)
                 if px is not None:
                     self._manage_open(cfg, px, release, pair_regime)
                     managed_any = True
                 else:
-                    self.state.last_message = f"OPEN {sym} — waiting quote (held until squared)"
+                    self.state.last_message = (
+                        f"OPEN {sym} — no fresh quote (management stalled)"
+                    )
             # Re-bind primary after possible closes
             self.ensure_bound_from_store(reason="post-manage")
             if pos_integrity.open_for_algo(self.algo_id):
@@ -396,6 +416,7 @@ class Algo1Breakout:
                 spot_closes = list(mkt.spot_values())
             elif index.get("spot") is not None:
                 spot_closes = [float(index["spot"])]
+        self._tick_spot_closes = list(spot_closes)
 
         # ——— DIRECTIONAL (default): one side from live market analysis ———
         if directional:
@@ -434,6 +455,12 @@ class Algo1Breakout:
             reason = str(analysis.get("reason") or "")
             allow = bool(analysis.get("allow_entry"))
             event = str(analysis.get("event") or "")
+            try:
+                tb = ((analysis.get("trend") or {}).get("bias") or "").upper()
+                if tb in ("UP", "DOWN", "FLAT"):
+                    self.state.trend_bias = tb
+            except Exception:
+                pass
 
             # Live macro / FII-OI / news overlay
             try:
@@ -716,8 +743,36 @@ class Algo1Breakout:
             is_soft = False
             is_micro = False
             is_pa = False
+            is_trend_follow = False
             day_flat = int(day_setups or 0) == 0
             bars_n_soft = len(spot_closes)
+
+            # Trend Follow — always ride breakout/breakdown with the session trend
+            # (and fire on confirmed trend change). Fills when primary path is idle.
+            if (
+                (not allow or side not in ("CE", "PE"))
+                and trend_follow_enabled(cfg)
+                and not is_post_decay
+                and not impulse_mode
+                and not pd_waiting
+            ):
+                tf = detect_trend_follow(
+                    spot_closes,
+                    cfg,
+                    ema9=index.get("ema9"),
+                    ema21=index.get("ema21"),
+                    prior_bias=self.state.trend_bias,
+                )
+                if tf.get("bias") in ("UP", "DOWN", "FLAT"):
+                    self.state.trend_bias = str(tf.get("bias") or self.state.trend_bias)
+                if bool(tf.get("allow_entry")) and tf.get("side") in ("CE", "PE"):
+                    allow = True
+                    is_trend_follow = True
+                    side = str(tf["side"])
+                    conf = float(tf.get("confidence") or 0)
+                    reason = str(tf.get("reason") or "trend_follow")
+                    event = str(tf.get("event") or "TREND_FOLLOW")
+                    analysis = tf
 
             # Micro 10–15pt pullback-resume (morning window, before soft PE)
             if (
@@ -806,12 +861,29 @@ class Algo1Breakout:
 
             # Signal persist N minutes (anti fake-break) — skip for post-decay
             persist_need = int(cfg.get("signal_persist_minutes", 0))
-            if is_pa:
+            if is_trend_follow:
+                persist_need = int(cfg.get("trend_follow_persist_minutes", 1))
+            elif is_pa:
                 persist_need = int(cfg.get("daily_pa_persist_minutes", 1))
             elif is_micro:
                 persist_need = int(cfg.get("micro_scalp_confirm_bars", 1))
             elif is_soft:
                 persist_need = int(cfg.get("daily_soft_persist_minutes", 1))
+            # CE grinds slow → confirm longer; PE dumps fast → enter quicker
+            if (
+                cfg.get("side_pace_rule_enabled", True)
+                and side in ("CE", "PE")
+                and not is_post_decay_ev
+            ):
+                if side == "CE":
+                    persist_need = max(
+                        persist_need, int(cfg.get("ce_signal_persist_minutes", 3))
+                    )
+                else:
+                    persist_need = min(
+                        persist_need if persist_need > 0 else 1,
+                        int(cfg.get("pe_signal_persist_minutes", 1)),
+                    )
             if is_post_decay_ev:
                 persist_need = 0
             if (
@@ -820,6 +892,7 @@ class Algo1Breakout:
                 and not is_soft
                 and not is_micro
                 and not is_pa
+                and not is_trend_follow
             ):
                 sr_vs = abs(float(analysis.get("vs_open") or 0))
                 sr_mom = abs(float(analysis.get("momentum") or 0))
@@ -869,7 +942,26 @@ class Algo1Breakout:
                 if sym and sym in quotes:
                     leg["ltp"] = quotes[sym]
 
-            pick = pick_leg_for_side(legs, side, premium_low=low, premium_high=high)
+            lot_size = int(cfg.get("lot_size", 75))
+            budget_inr = float(cfg.get("capital_inr") or 0)
+            max_premium = None
+            if budget_inr > 0 and lot_size > 0:
+                max_premium = (budget_inr * 0.98) / (
+                    lot_size * max(1, int(cfg.get("min_lots_per_trade", 1) or 1))
+                )
+            strike_mode = str(cfg.get("strike_select_mode") or "atm").lower()
+            pick = pick_leg_for_side(
+                legs,
+                side,
+                premium_low=low,
+                premium_high=high,
+                atm=(
+                    float(scan.get("atm") or 0) or None
+                    if strike_mode == "atm"
+                    else None
+                ),
+                max_premium=max_premium,
+            )
             if not pick:
                 self.state.last_message = f"no {side} leg in premium band {low}-{high}"
                 return
@@ -904,7 +996,7 @@ class Algo1Breakout:
             if cfg.get("lots_override") is not None:
                 lots = int(cfg["lots_override"])
             else:
-                lots = size_lots(cfg, entry=entry)
+                lots = size_lots(cfg, entry=entry, algo=self.algo_id)
             if int(day_stats.get("losses") or 0) >= 2:
                 lots = max(1, lots // 2)
             # Impulse: optional size bump (capped) for sharp moves
@@ -916,6 +1008,24 @@ class Algo1Breakout:
                 lots = micro_lots(cfg, lots)
             elif is_soft:
                 lots = soft_lots(cfg, lots)
+            # Final affordability check at the actual chosen premium. Estimated
+            # lots from a scan price can exceed cash and get rejected by Kite.
+            if budget_inr > 0 and entry > 0 and lot_size > 0:
+                affordable = int((budget_inr * 0.98) // (entry * lot_size))
+                if affordable < 1:
+                    release(self.algo_id)
+                    msg = (
+                        f"1 lot {symbol} @ {entry:.2f} = ₹{entry*lot_size:,.0f} "
+                        f"> budget ₹{budget_inr:,.0f}"
+                    )
+                    self.state.last_message = msg
+                    self.state.notification = {
+                        "ts": datetime.now(IST).isoformat(),
+                        "message": msg,
+                        "level": "error",
+                    }
+                    return
+                lots = min(lots, affordable)
             # Exit profile: PA / micro / soft / impulse / primary
             if is_pa:
                 exit_cfg = {**cfg, **daily_pa_exit_overlay(cfg)}
@@ -927,7 +1037,9 @@ class Algo1Breakout:
                 exit_cfg = impulse_exit_overrides(cfg, impulse_mode)
             else:
                 exit_cfg = cfg
-            if is_pa:
+            if is_trend_follow:
+                tag = "TREND"
+            elif is_pa:
                 tag = "PA"
             elif is_micro:
                 tag = "MICRO"
@@ -969,6 +1081,10 @@ class Algo1Breakout:
             features["daily_soft"] = bool(is_soft)
             features["micro_scalp"] = bool(is_micro)
             features["daily_pa"] = bool(is_pa)
+            features["trend_follow"] = bool(is_trend_follow)
+            features["trend_change"] = bool(
+                (analysis or {}).get("trend_change")
+            ) if is_trend_follow else False
             features["entry_spot"] = (
                 float(spot_closes[-1]) if spot_closes else None
             )
@@ -1031,7 +1147,7 @@ class Algo1Breakout:
                 side=side, confidence=conf, reason=reason, index=index,
                 macro=macro, pair_regime=pair_regime, gap=abs(ce_ltp - pe_ltp),
             ),
-            lots=size_lots(cfg, entry=entry),
+            lots=size_lots(cfg, entry=entry, algo=self.algo_id),
             stop_px=stop_price(entry, cfg),
             target_px=target_price(entry, cfg),
         )
@@ -1396,6 +1512,27 @@ class Algo1Breakout:
             f"{hedge_tag} [{trade.get('broker_status')}|{conf}]"
         )
 
+    def _rest_ltp(self, symbol: str, trade: dict[str, Any]) -> float | None:
+        """Direct Kite LTP fallback, throttled per symbol to avoid REST spam."""
+        now = time.time()
+        ts_map = getattr(self, "_rest_ltp_ts", None)
+        if ts_map is None:
+            ts_map = self._rest_ltp_ts = {}
+        if now - float(ts_map.get(symbol) or 0.0) < 2.0:
+            return None
+        ts_map[symbol] = now
+        try:
+            return float(
+                broker._market_ltp(
+                    symbol,
+                    fallback=None,
+                    trade=trade,
+                    extra={"underlying": self.underlying},
+                )
+            )
+        except Exception:
+            return None
+
     def _manage_open(
         self,
         cfg: dict[str, Any],
@@ -1439,9 +1576,38 @@ class Algo1Breakout:
         else:
             exit_cfg = cfg
 
+        entry_conf = feats.get("confidence")
+        try:
+            entry_conf_f = float(entry_conf) if entry_conf is not None else None
+        except (TypeError, ValueError):
+            entry_conf_f = None
+        open_side = str(open_row.get("side") or self.state.predicted_side or "")
         decision = manage_percent_exit(
-            entry=entry, px=px, peak=peak, cfg=exit_cfg, held_minutes=held_m
+            entry=entry,
+            px=px,
+            peak=peak,
+            cfg=exit_cfg,
+            held_minutes=held_m,
+            confidence=entry_conf_f,
+            side=open_side,
         )
+        if decision.get("action") != "exit" and (
+            feats.get("trend_follow")
+            or cfg.get("enable_trend_follow", True)
+        ):
+            spot_closes = list(getattr(self, "_tick_spot_closes", None) or [])
+            if len(spot_closes) >= 20:
+                flip = trend_follow_should_exit_open(
+                    open_side=open_side,
+                    closes=spot_closes,
+                    cfg=cfg,
+                )
+                if flip.get("action") == "exit":
+                    decision = {
+                        **decision,
+                        "action": "exit",
+                        "reason": str(flip.get("reason") or "trend flip"),
+                    }
         if decision.get("action") != "exit" and (
             feats.get("micro_scalp") or feats.get("daily_pa")
         ):
@@ -1452,7 +1618,7 @@ class Algo1Breakout:
                     pa_spot_bank_hit if feats.get("daily_pa") else micro_spot_bank_hit
                 )
                 bank = bank_fn(
-                    side=str(open_row.get("side") or self.state.predicted_side or "CE"),
+                    side=open_side or "CE",
                     entry_spot=float(entry_spot),
                     spot=float(spot_now),
                     entry_px=entry,
@@ -1461,10 +1627,20 @@ class Algo1Breakout:
                 )
                 if bank:
                     decision = {**decision, **bank}
+        decision = apply_entry_hold_gate(
+            decision,
+            entry=entry,
+            px=px,
+            held_minutes=held_m,
+            cfg=exit_cfg,
+            confidence=entry_conf_f,
+            side=open_side,
+        )
         sl = float(decision.get("stop_px") or stop_price(entry, exit_cfg))
         tg = float(decision.get("target_px") or target_price(entry, exit_cfg, trail=True))
 
         # Ultra-fast scalp: bank small green within N seconds on impulse trades
+        # Still respects the global min-hold / confidence loss-points gate.
         reason = None
         if impulse_mode and cfg.get("impulse_quick_scalp", True):
             held_s = held_m * 60.0
@@ -1477,6 +1653,20 @@ class Algo1Breakout:
             fail_pct = float(cfg.get("impulse_fail_pct", 2.0)) / 100.0
             if reason is None and held_s >= fail_s and px <= entry * (1.0 - fail_pct):
                 reason = f"impulse fail −{fail_pct*100:.0f}% in {held_s:.0f}s"
+            if reason:
+                gated = apply_entry_hold_gate(
+                    {"action": "exit", "reason": reason},
+                    entry=entry,
+                    px=px,
+                    held_minutes=held_m,
+                    cfg=exit_cfg,
+                    confidence=entry_conf_f,
+                    side=open_side,
+                )
+                if gated.get("action") != "exit":
+                    reason = None
+                else:
+                    reason = str(gated.get("reason") or reason)
 
         trade_store.update_trade(
             self.state.open_trade_id,
@@ -1521,15 +1711,26 @@ class Algo1Breakout:
                 )
                 if h_px <= 0:
                     h_px = px
-                broker.close_long(
+                hedge_closed = broker.close_long(
                     self.state.hedge_trade_id,
                     h_px,
                     f"hedge with primary: {reason}",
                     lot_size,
                 )
+                if not hedge_closed:
+                    self.state.last_message = (
+                        f"EXIT PENDING — hedge sell not confirmed ({reason})"
+                    )
+                    return
                 self.state.hedge_trade_id = None
                 self.state.hedge_symbol = None
-            broker.close_long(self.state.open_trade_id, px, reason, lot_size)
+            closed = broker.close_long(self.state.open_trade_id, px, reason, lot_size)
+            if not closed:
+                # Keep the leg OPEN and retry; never pretend a live sell filled.
+                self.state.last_message = (
+                    f"EXIT PENDING — sell not confirmed ({reason})"
+                )
+                return
             self.state.last_message = f"closed: {reason}"
             self.state.open_trade_id = None
             self.state.open_symbol = None

@@ -263,5 +263,502 @@
       "wrong": 0,
       "pnl": 0.0
     }
+  },
+  {
+    "date": "2026-11-04",
+    "samples": 28,
+    "changes": [
+      "min_confidence 0.58 \u2192 0.61 (WR 39% weak)",
+      "weight post_decay 1.00 \u2192 0.92 (tag WR 0%)",
+      "weight macro_risk_off 0.84 \u2192 0.76 (tag WR 39%)"
+    ],
+    "paper": {
+      "right": 11,
+      "wrong": 17,
+      "pnl": -50582.52
+    },
+    "live": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    }
+  },
+  {
+    "date": "2026-11-04",
+    "source": "retrain_today_profit",
+    "tag": "hard_giveback_55",
+    "pnl": 4980.0,
+    "changes": [
+      "sr_hard_max_giveback_pts",
+      "sr_max_giveback_pts"
+    ],
+    "note": "Nov4 autopsy: SR_RECLAIM CE after large giveback from day high while hard UP \u2192 knife. Applied winner pack from causal sweep."
+  },
+  {
+    "date": "2026-11-05",
+    "source": "retrain_week_profit",
+    "tag": "kill_pa",
+    "net": 31156.42,
+    "note": "Kill PA/micro/soft scalp chop; swing structure + giveback gate for projected week profit"
+  },
+  {
+    "date": "2026-11-05",
+    "source": "retrain_week_profit",
+    "tag": "kill_pa",
+    "net": 12143.64,
+    "note": "Kill PA/micro/soft scalp chop; swing structure + giveback gate for projected week profit"
+  },
+  {
+    "date": "2026-11-05",
+    "source": "retrain_week_profit",
+    "tag": "pa_strict_only",
+    "net": 9710.88,
+    "note": "Kill PA/micro/soft scalp chop; swing structure + giveback gate for projected week profit"
+  },
+  {
+    "date": "2026-11-05",
+    "samples": 59,
+    "changes": [
+      "min_confidence 0.61 \u2192 0.64 (WR 41% weak)",
+      "weight post_decay 0.92 \u2192 0.84 (tag WR 0%)",
+      "weight macro_risk_off 0.76 \u2192 0.68 (tag WR 39%)",
+      "weight OPP_PE_BREAK_DOWN 1.00 \u2192 1.08 (tag WR 75%)",
+      "weight OPP_CE_BREAK_DOWN 1.00 \u2192 0.92 (tag WR 0%)"
+    ],
+    "paper": {
+      "right": 24,
+      "wrong": 35,
+      "pnl": -61626.27
+    },
+    "live": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    }
+  },
+  {
+    "date": "2026-11-06",
+    "samples": 60,
+    "changes": [
+      "min_confidence 0.64 \u2192 0.65 (WR 42% weak)",
+      "weight macro_risk_off 0.68 \u2192 0.60 (tag WR 39%)",
+      "weight OPP_CE_BREAK_DOWN 0.92 \u2192 0.84 (tag WR 0%)",
+      "weight post_decay 0.84 \u2192 0.76 (tag WR 0%)",
+      "weight OPP_PE_BREAK_DOWN 1.08 \u2192 1.16 (tag WR 75%)"
+    ],
+    "paper": {
+      "right": 25,
+      "wrong": 35,
+      "pnl": -61626.27
+    },
+    "live": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    }
+  },
+  {
+    "date": "2026-11-07",
+    "samples": 71,
+    "changes": [
+      "min_confidence 0.65 \u2192 0.65 (WR 39% weak)",
+      "weight EDGE_BOTTOM 1.00 \u2192 0.92 (tag WR 38%)",
+      "weight macro_risk_off 0.60 \u2192 0.52 (tag WR 39%)",
+      "weight OPP_CE_BREAK_DOWN 0.84 \u2192 0.76 (tag WR 0%)",
+      "weight OPP_PE_BREAK_DOWN 1.16 \u2192 1.24 (tag WR 83%)",
+      "weight EDGE 1.00 \u2192 0.92 (tag WR 38%)",
+      "weight post_decay 0.76 \u2192 0.68 (tag WR 0%)",
+      "weight DESC 1.00 \u2192 0.92 (tag WR 17%)"
+    ],
+    "paper": {
+      "right": 28,
+      "wrong": 43,
+      "pnl": -61311.27
+    },
+    "live": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    }
+  },
+  {
+    "date": "2026-11-08",
+    "samples": 71,
+    "changes": [
+      "min_confidence 0.65 \u2192 0.65 (WR 39% weak)",
+      "weight macro_risk_off 0.52 \u2192 0.50 (tag WR 39%)",
+      "weight EDGE_BOTTOM 0.92 \u2192 0.84 (tag WR 38%)",
+      "weight post_decay 0.68 \u2192 0.60 (tag WR 0%)",
+      "weight OPP_CE_BREAK_DOWN 0.76 \u2192 0.68 (tag WR 0%)",
+      "weight DESC 0.92 \u2192 0.84 (tag WR 17%)",
+      "weight EDGE 0.92 \u2192 0.84 (tag WR 38%)",
+      "weight OPP_PE_BREAK_DOWN 1.24 \u2192 1.32 (tag WR 83%)"
+    ],
+    "paper": {
+      "right": 28,
+      "wrong": 43,
+      "pnl": -61311.27
+    },
+    "live": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    }
+  },
+  {
+    "date": "2026-11-09",
+    "samples": 85,
+    "changes": [
+      "min_confidence 0.65 \u2192 0.65 (WR 38% weak)",
+      "weight OPP_CE_BREAK_DOWN 0.68 \u2192 0.60 (tag WR 0%)",
+      "weight atm_channel 1.00 \u2192 0.92 (tag WR 39%)",
+      "weight EDGE_BOTTOM 0.84 \u2192 0.76 (tag WR 34%)",
+      "weight DESC 0.84 \u2192 0.76 (tag WR 14%)",
+      "weight OPP_PE_BREAK_DOWN 1.32 \u2192 1.40 (tag WR 83%)",
+      "weight post_decay 0.60 \u2192 0.52 (tag WR 0%)",
+      "weight EDGE 0.84 \u2192 0.76 (tag WR 34%)"
+    ],
+    "paper": {
+      "right": 32,
+      "wrong": 53,
+      "pnl": -62451.27
+    },
+    "live": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    }
+  },
+  {
+    "date": "2026-11-10",
+    "samples": 86,
+    "changes": [
+      "min_confidence 0.65 \u2192 0.65 (WR 38% weak)",
+      "weight atm_channel 0.92 \u2192 0.84 (tag WR 39%)",
+      "weight post_decay 0.52 \u2192 0.50 (tag WR 0%)",
+      "weight OPP_CE_BREAK_DOWN 0.60 \u2192 0.52 (tag WR 0%)",
+      "weight DESC 0.76 \u2192 0.68 (tag WR 14%)",
+      "weight EDGE 0.76 \u2192 0.68 (tag WR 34%)",
+      "weight EDGE_BOTTOM 0.76 \u2192 0.68 (tag WR 34%)",
+      "weight OPP_PE_BREAK_DOWN 1.40 \u2192 1.48 (tag WR 83%)"
+    ],
+    "paper": {
+      "right": 33,
+      "wrong": 53,
+      "pnl": -58911.27
+    },
+    "live": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    }
+  },
+  {
+    "date": "2026-11-11",
+    "samples": 86,
+    "changes": [
+      "min_confidence 0.65 \u2192 0.65 (WR 38% weak)",
+      "weight atm_channel 0.84 \u2192 0.76 (tag WR 39%)",
+      "weight DESC 0.68 \u2192 0.60 (tag WR 14%)",
+      "weight EDGE 0.68 \u2192 0.60 (tag WR 34%)",
+      "weight OPP_CE_BREAK_DOWN 0.52 \u2192 0.50 (tag WR 0%)",
+      "weight OPP_PE_BREAK_DOWN 1.48 \u2192 1.50 (tag WR 83%)",
+      "weight EDGE_BOTTOM 0.68 \u2192 0.60 (tag WR 34%)"
+    ],
+    "paper": {
+      "right": 33,
+      "wrong": 53,
+      "pnl": -58911.27
+    },
+    "live": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    }
+  },
+  {
+    "date": "2026-11-12",
+    "samples": 91,
+    "changes": [
+      "min_confidence 0.65 \u2192 0.65 (WR 40% weak)",
+      "weight atm_channel 0.76 \u2192 0.68 (tag WR 40%)",
+      "weight DESC 0.60 \u2192 0.52 (tag WR 12%)",
+      "weight EDGE 0.60 \u2192 0.52 (tag WR 36%)",
+      "weight EDGE_BOTTOM 0.60 \u2192 0.52 (tag WR 36%)"
+    ],
+    "paper": {
+      "right": 36,
+      "wrong": 55,
+      "pnl": -55255.02
+    },
+    "live": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    }
+  },
+  {
+    "date": "2026-11-13",
+    "samples": 91,
+    "changes": [
+      "min_confidence 0.65 \u2192 0.65 (WR 40% weak)",
+      "weight EDGE 0.52 \u2192 0.50 (tag WR 36%)",
+      "weight DESC 0.52 \u2192 0.50 (tag WR 12%)",
+      "weight EDGE_BOTTOM 0.52 \u2192 0.50 (tag WR 36%)",
+      "weight atm_channel 0.68 \u2192 0.60 (tag WR 40%)"
+    ],
+    "paper": {
+      "right": 36,
+      "wrong": 55,
+      "pnl": -55255.02
+    },
+    "live": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    }
+  },
+  {
+    "date": "2026-11-14",
+    "samples": 96,
+    "changes": [
+      "min_confidence 0.65 \u2192 0.65 (WR 40% weak)"
+    ],
+    "paper": {
+      "right": 38,
+      "wrong": 58,
+      "pnl": -60283.77
+    },
+    "live": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    }
+  },
+  {
+    "date": "2026-11-15",
+    "samples": 96,
+    "changes": [
+      "min_confidence 0.65 \u2192 0.65 (WR 40% weak)"
+    ],
+    "paper": {
+      "right": 38,
+      "wrong": 58,
+      "pnl": -60283.77
+    },
+    "live": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    }
+  },
+  {
+    "date": "2026-11-15",
+    "samples": 96,
+    "changes": [
+      "min_confidence 0.65 \u2192 0.65 (WR 40% weak)"
+    ],
+    "paper": {
+      "right": 38,
+      "wrong": 58,
+      "pnl": -60283.77
+    },
+    "live": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    }
+  },
+  {
+    "date": "2026-11-16",
+    "samples": 98,
+    "changes": [
+      "min_confidence 0.65 \u2192 0.65 (WR 40% weak)"
+    ],
+    "paper": {
+      "right": 39,
+      "wrong": 59,
+      "pnl": -76333.77
+    },
+    "live": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    }
+  },
+  {
+    "date": "2026-11-16",
+    "samples": 98,
+    "changes": [
+      "min_confidence 0.65 \u2192 0.65 (WR 40% weak)"
+    ],
+    "paper": {
+      "right": 39,
+      "wrong": 59,
+      "pnl": -76333.77
+    },
+    "live": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    }
+  },
+  {
+    "date": "2026-11-16",
+    "samples": 99,
+    "changes": [
+      "min_confidence 0.65 \u2192 0.65 (WR 40% weak)"
+    ],
+    "paper": {
+      "right": 40,
+      "wrong": 59,
+      "pnl": -75418.77
+    },
+    "live": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    }
+  },
+  {
+    "date": "2026-11-17",
+    "samples": 102,
+    "changes": [
+      "min_confidence 0.65 \u2192 0.65 (WR 39% weak)",
+      "weight convergence 1.00 \u2192 0.92 (tag WR 25%)",
+      "weight CE 1.00 \u2192 0.92 (tag WR 33%)",
+      "weight breakout_only 1.00 \u2192 0.92 (tag WR 25%)"
+    ],
+    "paper": {
+      "right": 40,
+      "wrong": 62,
+      "pnl": -79123.77
+    },
+    "live": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    }
+  },
+  {
+    "date": "2026-11-17",
+    "source": "train_band_lock_without_atm",
+    "samples": 1,
+    "changes": [
+      "atm_diag_merge_gate_required=false",
+      "atm_diag_equal_tol 3\to5",
+      "lock clear 125-145 cross-strike merge even when ATM CE/PE wide"
+    ],
+    "insight": "25450CE/25250PE merged ~09:33-09:38 then CE broke; ATM gate (gap 20-47) blocked lock. Band-only lock recovers morning CE breakout on next-week NOV."
+  },
+  {
+    "date": "2026-11-17",
+    "source": "train_cross_atm_x_expiry",
+    "samples": 1,
+    "changes": [
+      "atm_diag_cross_x_enabled=true",
+      "if ATM not merged on expiry/next-week, accept CE(ATM+d)\u2248PE(ATM\u2212d) X / straddle X"
+    ],
+    "insight": "Expiry next-week: ATM same-strike wide is OK when cross-ATM X is tight in 125\u2013145 (CE25450\u2248PE25250)."
+  },
+  {
+    "date": "2026-11-18",
+    "samples": 104,
+    "changes": [
+      "min_confidence 0.65 \u2192 0.65 (WR 39% weak)",
+      "weight CE 0.92 \u2192 0.84 (tag WR 33%)",
+      "weight breakout_only 0.92 \u2192 0.84 (tag WR 25%)",
+      "weight convergence 0.92 \u2192 0.84 (tag WR 25%)"
+    ],
+    "paper": {
+      "right": 41,
+      "wrong": 63,
+      "pnl": -71038.77
+    },
+    "live": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    }
+  },
+  {
+    "date": "2026-11-18",
+    "samples": 112,
+    "changes": [
+      "min_confidence 0.65 \u2192 0.65 (WR 40% weak)",
+      "weight breakout_only 0.84 \u2192 0.76 (tag WR 25%)",
+      "weight convergence 0.84 \u2192 0.76 (tag WR 25%)",
+      "weight CE 0.84 \u2192 0.76 (tag WR 33%)"
+    ],
+    "paper": {
+      "right": 45,
+      "wrong": 67,
+      "pnl": -70273.77
+    },
+    "live": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    }
+  },
+  {
+    "date": "2026-11-19",
+    "samples": 115,
+    "changes": [
+      "min_confidence 0.65 \u2192 0.65 (WR 40% weak)",
+      "weight breakout_only 0.76 \u2192 0.68 (tag WR 25%)",
+      "weight convergence 0.76 \u2192 0.68 (tag WR 25%)",
+      "weight CE 0.76 \u2192 0.68 (tag WR 33%)"
+    ],
+    "paper": {
+      "right": 46,
+      "wrong": 69,
+      "pnl": -76348.77
+    },
+    "live": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    }
+  },
+  {
+    "date": "2026-11-19",
+    "samples": 116,
+    "changes": [
+      "min_confidence 0.65 \u2192 0.65 (WR 40% weak)",
+      "weight breakout_only 0.68 \u2192 0.60 (tag WR 25%)",
+      "weight convergence 0.68 \u2192 0.60 (tag WR 25%)",
+      "weight CE 0.68 \u2192 0.60 (tag WR 33%)"
+    ],
+    "paper": {
+      "right": 46,
+      "wrong": 70,
+      "pnl": -81973.77
+    },
+    "live": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    }
+  },
+  {
+    "date": "2026-11-20",
+    "samples": 118,
+    "changes": [
+      "min_confidence 0.65 \u2192 0.65 (WR 40% weak)",
+      "weight breakout_only 0.60 \u2192 0.52 (tag WR 25%)",
+      "weight CE 0.60 \u2192 0.52 (tag WR 33%)",
+      "weight convergence 0.60 \u2192 0.52 (tag WR 25%)"
+    ],
+    "paper": {
+      "right": 47,
+      "wrong": 71,
+      "pnl": -91873.77
+    },
+    "live": {
+      "right": 0,
+      "wrong": 0,
+      "pnl": 0.0
+    }
   }
 ]

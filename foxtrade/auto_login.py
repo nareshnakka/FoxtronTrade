@@ -139,25 +139,30 @@ def perform_auto_login(*, force: bool = False) -> dict[str, Any]:
             _last_result = out
             return out
 
-        # Connect OAuth — follow redirects with session cookies to capture request_token
+        # Connect OAuth — follow redirects manually and STOP at request_token.
+        # Do not allow_redirects into local /callback (dashboard would consume the token).
         connect_url = (
             f"https://kite.zerodha.com/connect/login?api_key={settings['api_key']}&v=3"
         )
-        r3 = sess.get(connect_url, timeout=25, allow_redirects=True)
-        final = str(r3.url or "")
-        qs = parse_qs(urlparse(final).query)
-        request_token = (qs.get("request_token") or [None])[0]
-        if not request_token:
-            # sometimes embedded in history
-            for h in r3.history:
-                q = parse_qs(urlparse(str(h.url)).query)
-                request_token = (q.get("request_token") or [None])[0]
-                if request_token:
-                    break
-        if not request_token:
-            # last resort: scan body
+        request_token = None
+        final = connect_url
+        cur = connect_url
+        for _ in range(10):
+            r3 = sess.get(cur, timeout=25, allow_redirects=False)
+            loc = r3.headers.get("Location") or ""
+            combined = loc or str(r3.url or "")
+            final = combined or final
+            if "request_token=" in combined:
+                request_token = (parse_qs(urlparse(combined).query).get("request_token") or [None])[0]
+                break
             m = re.search(r"request_token=([a-zA-Z0-9]+)", r3.text or "")
-            request_token = m.group(1) if m else None
+            if m:
+                request_token = m.group(1)
+                break
+            if r3.status_code in (301, 302, 303, 307, 308) and loc:
+                cur = loc if loc.startswith("http") else f"https://kite.zerodha.com{loc}"
+                continue
+            break
         if not request_token:
             out = {
                 "ok": False,

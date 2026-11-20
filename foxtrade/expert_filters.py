@@ -356,7 +356,11 @@ def detect_sr_range_entry(
         )
         giveback = day_hi - spot
         max_gb = float(cfg.get("sr_max_giveback_pts", 0))
+        # Soft-day dead-cat: classic. Hard-day also — Nov4 2026 SR knife bought
+        # CE after ~70pt giveback from day high while still "hard UP".
+        hard_gb = float(cfg.get("sr_hard_max_giveback_pts", 0)) or max_gb
         dead_cat = max_gb > 0 and giveback >= max_gb and vs_open < hard
+        hard_dead_cat = hard_gb > 0 and giveback >= hard_gb and vs_open >= hard
         # Train Jun 2026: soft early SR (vs +8) needs strong rising mom.
         soft_vs = float(cfg.get("sr_soft_vs_open", 25))
         soft_mom = float(cfg.get("sr_soft_min_mom10", 18))
@@ -370,6 +374,7 @@ def detect_sr_range_entry(
             and not hard_stall
             and not spent_or_am
             and not dead_cat
+            and not hard_dead_cat
             and not soft_early
             and (
                 (undercut and reclaim)
@@ -593,25 +598,86 @@ def target_pct_band(cfg: dict[str, Any]) -> tuple[float, float]:
     return lo, hi
 
 
-def size_lots(cfg: dict[str, Any], *, stop_points: float | None = None, entry: float | None = None) -> int:
+def _cfg_capital(cfg: dict[str, Any], *, algo: str | None = None) -> float:
+    """Resolve capital for an algo book; falls back to shared capital_inr."""
+    base = float(cfg.get("capital_inr") or 200_000)
+    if not algo:
+        return base
+    key = {
+        "algo1": "algo1_capital_inr",
+        "algo1_sx": "algo1_capital_inr",
+        "algo2": "algo2_capital_inr",
+        "algo2nw": "algo2nw_capital_inr",
+    }.get(algo)
+    if not key:
+        return base
+    raw = cfg.get(key)
+    if raw is None and algo == "algo2nw":
+        raw = cfg.get("algo2_capital_inr")
+    return float(raw if raw is not None else base)
+
+
+def _cfg_deploy(cfg: dict[str, Any], *, algo: str | None = None) -> float:
+    base = float(cfg.get("deploy_pct_of_balance") or 0.9)
+    if not algo:
+        return base
+    key = {
+        "algo1": "algo1_deploy_pct",
+        "algo1_sx": "algo1_deploy_pct",
+        "algo2": "algo2_deploy_pct",
+        "algo2nw": "algo2nw_deploy_pct",
+    }.get(algo)
+    if not key:
+        return base
+    raw = cfg.get(key)
+    if raw is None and algo == "algo2nw":
+        raw = cfg.get("algo2_deploy_pct")
+    return float(raw if raw is not None else base)
+
+
+def size_dual_pair_lots(
+    cfg: dict[str, Any], *, ce_entry: float, pe_entry: float, algo: str | None = None
+) -> int:
+    """
+    Equal lots on CE+PE from capital × deploy / ((CE+PE) × lot_size).
+    Matches dual 70–80 backtests (e.g. ₹2L × 90%).
+    """
+    capital = _cfg_capital(cfg, algo=algo)
+    lot_size = int(cfg.get("lot_size", 75))
+    max_lots = int(cfg.get("max_lots_per_trade", 20))
+    min_lots = int(cfg.get("min_lots_per_trade", 1))
+    deploy = _cfg_deploy(cfg, algo=algo)
+    budget = capital * min(0.95, max(0.50, deploy))
+    pair_cost = (float(ce_entry) + float(pe_entry)) * lot_size
+    lots = int(budget // max(pair_cost, 1.0))
+    return max(min_lots, min(max_lots, max(lots, min_lots if lots == 0 else lots)))
+
+
+def size_lots(
+    cfg: dict[str, Any],
+    *,
+    stop_points: float | None = None,
+    entry: float | None = None,
+    algo: str | None = None,
+) -> int:
     """
     Lot sizing for live/paper.
     Prefer deploy_pct_of_balance × capital ÷ (premium × lot_size) when entry known
     (matches multi_1l_d75 aggressive ~70–80% deploy). Else fall back to risk %.
     """
-    capital = float(cfg.get("capital_inr", 200_000))
+    capital = _cfg_capital(cfg, algo=algo)
     lot_size = int(cfg.get("lot_size", 75))
     max_lots = int(cfg.get("max_lots_per_trade", 4))
     min_lots = int(cfg.get("min_lots_per_trade", 1))
 
-    deploy = float(cfg.get("deploy_pct_of_balance", 0) or 0)
+    deploy = _cfg_deploy(cfg, algo=algo) if algo else float(cfg.get("deploy_pct_of_balance", 0) or 0)
     if deploy > 0 and entry is not None and float(entry) > 0:
         # Auto pack: spend ~70–80% of capital; allow enough lots to fill the budget
         budget = capital * min(0.95, max(0.50, deploy))
         per_lot_prem = float(entry) * lot_size
         lots = int(budget // max(per_lot_prem, 1.0))
-        ceil = max(max_lots, 20)  # don't starve deploy with a tiny lot cap
-        return max(min_lots, min(ceil, max(lots, min_lots if lots == 0 else lots)))
+        # Respect the configured cap; the old max(...,20) silently overrode it.
+        return max(min_lots, min(max_lots, max(lots, min_lots if lots == 0 else lots)))
 
     risk_pct = float(cfg.get("risk_per_trade_pct", 1.0)) / 100.0
     if stop_points is not None:
@@ -659,6 +725,143 @@ def target_price(entry: float, cfg: dict[str, Any], *, trail: bool = False) -> f
     return max(hard, by_pts) if trail else max(float(cfg.get("target_low", 169)), by_pts)
 
 
+def entry_min_hold_minutes(cfg: dict[str, Any], side: str | None = None) -> float:
+    """
+    Minimum hold before soft exits.
+
+    Learned pace: CE markets grind slowly → longer hold; PE dumps fast → shorter.
+    """
+    base = max(0.0, float(cfg.get("entry_min_hold_minutes", 5)))
+    if not cfg.get("side_pace_rule_enabled", True):
+        return base
+    s = (side or "").upper()
+    if s == "CE":
+        return max(base, float(cfg.get("ce_entry_min_hold_minutes", 8)))
+    if s == "PE":
+        return max(0.0, float(cfg.get("pe_entry_min_hold_minutes", 3)))
+    return base
+
+
+def entry_hold_loss_points(
+    cfg: dict[str, Any],
+    confidence: float | None = None,
+    side: str | None = None,
+) -> float:
+    """
+    Adverse premium points that may exit during the min-hold window.
+
+    Higher confidence → closer to the full budget (more patience).
+    Lower confidence → tighter early cut.
+    CE gets a wider noise budget (slow grind); PE cuts tighter (fast fall).
+    """
+    base = max(1.0, float(cfg.get("entry_min_hold_loss_points", 10)))
+    low_pts = max(1.0, float(cfg.get("entry_min_hold_loss_points_low_conf", 7)))
+    if cfg.get("side_pace_rule_enabled", True):
+        s = (side or "").upper()
+        if s == "CE":
+            base = max(base, float(cfg.get("ce_entry_min_hold_loss_points", 12)))
+            low_pts = max(low_pts, float(cfg.get("ce_entry_min_hold_loss_points_low_conf", 9)))
+        elif s == "PE":
+            base = min(base, float(cfg.get("pe_entry_min_hold_loss_points", 8)))
+            low_pts = min(low_pts, float(cfg.get("pe_entry_min_hold_loss_points_low_conf", 6)))
+    high = float(cfg.get("entry_hold_high_confidence", 0.72))
+    low = float(cfg.get("entry_hold_low_confidence", 0.55))
+    conf = float(confidence) if confidence is not None else (high + low) / 2.0
+    if conf >= high:
+        return round(base, 2)
+    if conf <= low:
+        return round(low_pts, 2)
+    # Linear blend between low_pts and base
+    span = max(1e-6, high - low)
+    t = (conf - low) / span
+    return round(low_pts + t * (base - low_pts), 2)
+
+
+def side_trail_giveback_pct(cfg: dict[str, Any], side: str | None = None) -> float:
+    """CE trails looser (slow grind); PE trails tighter (fast fall)."""
+    base = float(cfg.get("trail_giveback_pct", 4.0))
+    if not cfg.get("side_pace_rule_enabled", True):
+        return base
+    s = (side or "").upper()
+    if s == "CE":
+        return float(cfg.get("ce_trail_giveback_pct", max(base, 5.5)))
+    if s == "PE":
+        return float(cfg.get("pe_trail_giveback_pct", min(base, 3.0)))
+    return base
+
+
+def entry_hold_gate(
+    *,
+    entry: float,
+    px: float,
+    held_minutes: float,
+    cfg: dict[str, Any],
+    confidence: float | None = None,
+    side: str | None = None,
+) -> dict[str, Any]:
+    """
+    Every entry: wait at least entry_min_hold_minutes for soft exits, or allow
+    an early cut once premium is down entry_hold_loss_points (confidence-scaled).
+    Side pace: CE patient, PE sharp.
+    """
+    entry = float(entry or 0)
+    px = float(px or 0)
+    min_hold = entry_min_hold_minutes(cfg, side)
+    loss_pts = entry_hold_loss_points(cfg, confidence, side)
+    adverse = (entry - px) if entry > 0 else 0.0
+    in_hold = held_minutes < min_hold
+    hard = entry > 0 and adverse >= loss_pts
+    return {
+        "min_hold_minutes": min_hold,
+        "loss_points": loss_pts,
+        "adverse_points": round(adverse, 2),
+        "in_hold": in_hold,
+        "allow_soft_exit": (not in_hold) or hard,
+        "hard_loss_exit": hard,
+        "side": (side or "").upper() or None,
+        "confidence": None if confidence is None else round(float(confidence), 3),
+        "reason": (
+            f"hold loss −{adverse:.1f}pt ({(side or '?').upper()} gate {loss_pts:g})"
+            if hard
+            else ""
+        ),
+    }
+
+
+def apply_entry_hold_gate(
+    decision: dict[str, Any],
+    *,
+    entry: float,
+    px: float,
+    held_minutes: float,
+    cfg: dict[str, Any],
+    confidence: float | None = None,
+    side: str | None = None,
+) -> dict[str, Any]:
+    """Suppress soft exits inside the min-hold; always honor confidence loss pts."""
+    gate = entry_hold_gate(
+        entry=entry,
+        px=px,
+        held_minutes=held_minutes,
+        cfg=cfg,
+        confidence=confidence,
+        side=side,
+    )
+    out = dict(decision or {})
+    out["hold_gate"] = gate
+    if gate["hard_loss_exit"]:
+        out["action"] = "exit"
+        out["reason"] = gate["reason"]
+        return out
+    if out.get("action") == "exit" and gate["in_hold"] and not gate["allow_soft_exit"]:
+        out["action"] = "hold"
+        out["reason"] = (
+            f"min hold {gate['min_hold_minutes']:g}m "
+            f"(need −{gate['loss_points']:g}pt or wait)"
+        )
+    return out
+
+
 def manage_percent_exit(
     *,
     entry: float,
@@ -666,6 +869,8 @@ def manage_percent_exit(
     peak: float,
     cfg: dict[str, Any],
     held_minutes: float = 0.0,
+    confidence: float | None = None,
+    side: str | None = None,
 ) -> dict[str, Any]:
     """
     Percent risk manager for long premium:
@@ -674,6 +879,8 @@ def manage_percent_exit(
       − trail stop under peak by trail_giveback_pct of entry
       − hard take-profit at +target_pct_high (50%)
       − time-stop only while still red
+      − first entry_min_hold_minutes: soft exits blocked unless −loss_points
+      − CE slow-grind / PE fast-fall side pace (hold + trail)
 
     Returns {action: hold|exit, reason, stop_px, target_px, peak, mult}.
     """
@@ -682,21 +889,48 @@ def manage_percent_exit(
     peak = max(float(peak), px, entry)
     mult = px / entry if entry else 1.0
     peak_mult = peak / entry if entry else 1.0
+    gate = entry_hold_gate(
+        entry=entry,
+        px=px,
+        held_minutes=held_minutes,
+        cfg=cfg,
+        confidence=confidence,
+        side=side,
+    )
+    if gate["hard_loss_exit"]:
+        sl = entry - float(gate["loss_points"])
+        tg = target_price(entry, cfg)
+        return {
+            "action": "exit",
+            "reason": gate["reason"],
+            "stop_px": sl,
+            "target_px": tg,
+            "peak": peak,
+            "mult": mult,
+            "hold_gate": gate,
+        }
 
     if not cfg.get("use_percent_exits", True):
         sl = stop_price(entry, cfg)
         tg = target_price(entry, cfg)
-        if px >= tg:
-            return {"action": "exit", "reason": f"target {tg:g}", "stop_px": sl, "target_px": tg, "peak": peak, "mult": mult}
+        # During min-hold, only the confidence loss-points stop may fire.
+        if gate["in_hold"]:
+            sl = min(float(sl), entry - float(gate["loss_points"]))
+        if px >= tg and not gate["in_hold"]:
+            return {"action": "exit", "reason": f"target {tg:g}", "stop_px": sl, "target_px": tg, "peak": peak, "mult": mult, "hold_gate": gate}
         if px <= sl:
-            return {"action": "exit", "reason": f"stop {sl:g}", "stop_px": sl, "target_px": tg, "peak": peak, "mult": mult}
+            return {"action": "exit", "reason": f"stop {sl:g}", "stop_px": sl, "target_px": tg, "peak": peak, "mult": mult, "hold_gate": gate}
         time_stop_m = float(cfg.get("time_stop_minutes", 18))
         # Expiry gamma: cut losers faster (autopsy med hold ~8m)
         if cfg.get("treat_as_expiry") or cfg.get("is_expiry_session"):
             time_stop_m = min(
                 time_stop_m, float(cfg.get("expiry_time_stop_minutes", 20))
             )
-        if held_minutes >= time_stop_m and px < entry:
+        if (
+            not gate["in_hold"]
+            and held_minutes >= time_stop_m
+            and px < entry
+        ):
             return {
                 "action": "exit",
                 "reason": f"time stop {time_stop_m:g}m fail",
@@ -704,13 +938,14 @@ def manage_percent_exit(
                 "target_px": tg,
                 "peak": peak,
                 "mult": mult,
+                "hold_gate": gate,
             }
-        return {"action": "hold", "reason": "", "stop_px": sl, "target_px": tg, "peak": peak, "mult": mult}
+        return {"action": "hold", "reason": "", "stop_px": sl, "target_px": tg, "peak": peak, "mult": mult, "hold_gate": gate}
 
     sl_pct = stop_loss_pct(cfg)
     lo_pct, hi_pct = target_pct_band(cfg)
     lock_pct = float(cfg.get("lock_profit_pct", 1.0)) / 100.0
-    giveback = float(cfg.get("trail_giveback_pct", 8.0)) / 100.0
+    giveback = side_trail_giveback_pct(cfg, side) / 100.0
     # Once armed, trail stop sits giveback below peak (as fraction of entry)
     hard_sl = entry * (1.0 - sl_pct)
     hard_tg = entry * (1.0 + hi_pct)
@@ -732,9 +967,16 @@ def manage_percent_exit(
     in_grace = grace_m > 0 and held_minutes < grace_m and peak_mult < 1.0 + lo_pct
     if in_grace:
         sl = entry * (1.0 - max(sl_pct, grace_sl_pct))
+    # Min-hold: ignore tight %-stops until −loss_points (confidence-scaled)
+    if gate["in_hold"]:
+        sl = min(float(sl), entry - float(gate["loss_points"]))
 
     # Prefer banking at first target if configured (scalp mode)
-    if cfg.get("exit_at_first_target", False) and px >= first_tg:
+    if (
+        cfg.get("exit_at_first_target", False)
+        and px >= first_tg
+        and not gate["in_hold"]
+    ):
         return {
             "action": "exit",
             "reason": f"first target +{lo_pct*100:.0f}%",
@@ -742,9 +984,10 @@ def manage_percent_exit(
             "target_px": first_tg,
             "peak": peak,
             "mult": mult,
+            "hold_gate": gate,
         }
 
-    if px >= hard_tg:
+    if px >= hard_tg and not gate["in_hold"]:
         return {
             "action": "exit",
             "reason": f"max target +{hi_pct*100:.0f}%",
@@ -752,11 +995,14 @@ def manage_percent_exit(
             "target_px": hard_tg,
             "peak": peak,
             "mult": mult,
+            "hold_gate": gate,
         }
     if px <= sl:
         tag = "trail stop" if peak_mult >= 1.0 + lo_pct and sl > hard_sl + 0.01 else "stop"
-        if in_grace:
+        if in_grace and not gate["in_hold"]:
             tag = "grace stop"
+        if gate["in_hold"]:
+            tag = "hold loss"
         return {
             "action": "exit",
             "reason": f"{tag} {sl:g} ({(sl/entry - 1)*100:+.1f}%)",
@@ -764,6 +1010,7 @@ def manage_percent_exit(
             "target_px": tg,
             "peak": peak,
             "mult": mult,
+            "hold_gate": gate,
         }
 
     time_stop_m = float(cfg.get("time_stop_minutes", 25))
@@ -772,7 +1019,12 @@ def manage_percent_exit(
             time_stop_m, float(cfg.get("expiry_time_stop_minutes", 20))
         )
     # Don't time-stop once we've armed the trail (in profit territory)
-    if held_minutes >= time_stop_m and px < entry and peak_mult < 1.0 + lo_pct:
+    if (
+        not gate["in_hold"]
+        and held_minutes >= time_stop_m
+        and px < entry
+        and peak_mult < 1.0 + lo_pct
+    ):
         return {
             "action": "exit",
             "reason": f"time stop {time_stop_m:g}m fail",
@@ -780,6 +1032,7 @@ def manage_percent_exit(
             "target_px": tg,
             "peak": peak,
             "mult": mult,
+            "hold_gate": gate,
         }
 
     return {
@@ -789,6 +1042,7 @@ def manage_percent_exit(
         "target_px": round(tg, 2),
         "peak": peak,
         "mult": round(mult, 4),
+        "hold_gate": gate,
     }
 
 
@@ -1056,6 +1310,7 @@ def evaluate_entry(
         lots = 1
 
     # Directional edge vs open — softer when breakout/breakdown confirms
+    # loose_entry_mode: use ce/pe_min_vs_open floors only (no soft/hard 35/70 lockout)
     hard = float(cfg.get("trend_hard_pts", 70))
     soft = float(cfg.get("trend_soft_pts", 35))
     vs_open = trend.get("vs_open")
@@ -1063,7 +1318,7 @@ def evaluate_entry(
         (shake.get("active") and shake.get("prefer_side") == side)
         or (brk.get("event") and brk.get("prefer_side") == side)
     )
-    if vs_open is not None:
+    if vs_open is not None and not cfg.get("loose_entry_mode", False):
         vo = float(vs_open)
         if side == "CE":
             need = soft * 0.6 if structure_side else soft
@@ -1089,6 +1344,26 @@ def evaluate_entry(
                     "stop": None,
                     "target": None,
                 }
+    elif vs_open is not None and cfg.get("loose_entry_mode", False):
+        vo = float(vs_open)
+        ce_need = float(cfg.get("ce_min_vs_open", 15))
+        pe_need = float(cfg.get("pe_min_vs_open", 15))
+        if side == "CE" and vo < ce_need:
+            return {
+                "ok": False,
+                "lots": 0,
+                "reason": f"CE needs spot ≥+{ce_need:.0f} vs open (now {vo:+.0f})",
+                "stop": None,
+                "target": None,
+            }
+        if side == "PE" and vo > -pe_need:
+            return {
+                "ok": False,
+                "lots": 0,
+                "reason": f"PE needs spot ≤−{pe_need:.0f} vs open (now {vo:+.0f})",
+                "stop": None,
+                "target": None,
+            }
 
     # Optional bank-after-win (default OFF — allow multiple winners)
     if int(cfg.get("bank_after_win", 0)) and day_pnl > 0 and losses_today == 0:

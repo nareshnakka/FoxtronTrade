@@ -87,7 +87,9 @@ def _nifty_fut_quote() -> dict[str, Any]:
         today = _day()
         sym = _FUT_SYM_CACHE.get("symbol") if _FUT_SYM_CACHE.get("day") == today else None
         if not sym:
-            instruments = kite.instruments("NFO")
+            from foxtrade.kite_cache import get_instruments
+
+            instruments = get_instruments("NFO")
             futs = [
                 i
                 for i in instruments

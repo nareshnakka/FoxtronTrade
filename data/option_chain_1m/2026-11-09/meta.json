@@ -1,0 +1,333 @@
+{
+  "day": "2026-11-09",
+  "window": "09:15-15:00 IST",
+  "spot_open_0915": 25076.4,
+  "atm_open": 25100,
+  "atm_dynamic": true,
+  "atm_seen": [
+    24850,
+    24900,
+    24950,
+    25000,
+    25050
+  ],
+  "strike_lo": 24600,
+  "strike_hi": 25300,
+  "wing": 5,
+  "expiry": "2026-11-17",
+  "current_expiry_scan": "2026-11-17",
+  "next_expiry_scan": "2026-11-23",
+  "n_ce": 15,
+  "n_pe": 15,
+  "contracts": [
+    {
+      "side": "CE",
+      "strike": 24600,
+      "atm_open": 25100,
+      "role_vs_open_atm": "ITM+10",
+      "tradingsymbol": "NIFTY26N1724600CE",
+      "instrument_token": 11612162,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "CE",
+      "strike": 24650,
+      "atm_open": 25100,
+      "role_vs_open_atm": "ITM+9",
+      "tradingsymbol": "NIFTY26N1724650CE",
+      "instrument_token": 11613698,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "CE",
+      "strike": 24700,
+      "atm_open": 25100,
+      "role_vs_open_atm": "ITM+8",
+      "tradingsymbol": "NIFTY26N1724700CE",
+      "instrument_token": 11614210,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "CE",
+      "strike": 24750,
+      "atm_open": 25100,
+      "role_vs_open_atm": "ITM+7",
+      "tradingsymbol": "NIFTY26N1724750CE",
+      "instrument_token": 11614722,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "CE",
+      "strike": 24800,
+      "atm_open": 25100,
+      "role_vs_open_atm": "ITM+6",
+      "tradingsymbol": "NIFTY26N1724800CE",
+      "instrument_token": 11616002,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "CE",
+      "strike": 24850,
+      "atm_open": 25100,
+      "role_vs_open_atm": "ITM+5",
+      "tradingsymbol": "NIFTY26N1724850CE",
+      "instrument_token": 11616514,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "CE",
+      "strike": 24900,
+      "atm_open": 25100,
+      "role_vs_open_atm": "ITM+4",
+      "tradingsymbol": "NIFTY26N1724900CE",
+      "instrument_token": 11617538,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "CE",
+      "strike": 24950,
+      "atm_open": 25100,
+      "role_vs_open_atm": "ITM+3",
+      "tradingsymbol": "NIFTY26N1724950CE",
+      "instrument_token": 11618306,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "CE",
+      "strike": 25000,
+      "atm_open": 25100,
+      "role_vs_open_atm": "ITM+2",
+      "tradingsymbol": "NIFTY26N1725000CE",
+      "instrument_token": 11618818,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "CE",
+      "strike": 25050,
+      "atm_open": 25100,
+      "role_vs_open_atm": "ITM+1",
+      "tradingsymbol": "NIFTY26N1725050CE",
+      "instrument_token": 11619330,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "CE",
+      "strike": 25100,
+      "atm_open": 25100,
+      "role_vs_open_atm": "ATM",
+      "tradingsymbol": "NIFTY26N1725100CE",
+      "instrument_token": 11619842,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "CE",
+      "strike": 25150,
+      "atm_open": 25100,
+      "role_vs_open_atm": "OTM+1",
+      "tradingsymbol": "NIFTY26N1725150CE",
+      "instrument_token": 11620354,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "CE",
+      "strike": 25200,
+      "atm_open": 25100,
+      "role_vs_open_atm": "OTM+2",
+      "tradingsymbol": "NIFTY26N1725200CE",
+      "instrument_token": 11620866,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "CE",
+      "strike": 25250,
+      "atm_open": 25100,
+      "role_vs_open_atm": "OTM+3",
+      "tradingsymbol": "NIFTY26N1725250CE",
+      "instrument_token": 11621378,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "CE",
+      "strike": 25300,
+      "atm_open": 25100,
+      "role_vs_open_atm": "OTM+4",
+      "tradingsymbol": "NIFTY26N1725300CE",
+      "instrument_token": 11622914,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "PE",
+      "strike": 24600,
+      "atm_open": 25100,
+      "role_vs_open_atm": "OTM+10",
+      "tradingsymbol": "NIFTY26N1724600PE",
+      "instrument_token": 11613442,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "PE",
+      "strike": 24650,
+      "atm_open": 25100,
+      "role_vs_open_atm": "OTM+9",
+      "tradingsymbol": "NIFTY26N1724650PE",
+      "instrument_token": 11613954,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "PE",
+      "strike": 24700,
+      "atm_open": 25100,
+      "role_vs_open_atm": "OTM+8",
+      "tradingsymbol": "NIFTY26N1724700PE",
+      "instrument_token": 11614466,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "PE",
+      "strike": 24750,
+      "atm_open": 25100,
+      "role_vs_open_atm": "OTM+7",
+      "tradingsymbol": "NIFTY26N1724750PE",
+      "instrument_token": 11614978,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "PE",
+      "strike": 24800,
+      "atm_open": 25100,
+      "role_vs_open_atm": "OTM+6",
+      "tradingsymbol": "NIFTY26N1724800PE",
+      "instrument_token": 11616258,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "PE",
+      "strike": 24850,
+      "atm_open": 25100,
+      "role_vs_open_atm": "OTM+5",
+      "tradingsymbol": "NIFTY26N1724850PE",
+      "instrument_token": 11616770,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "PE",
+      "strike": 24900,
+      "atm_open": 25100,
+      "role_vs_open_atm": "OTM+4",
+      "tradingsymbol": "NIFTY26N1724900PE",
+      "instrument_token": 11618050,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "PE",
+      "strike": 24950,
+      "atm_open": 25100,
+      "role_vs_open_atm": "OTM+3",
+      "tradingsymbol": "NIFTY26N1724950PE",
+      "instrument_token": 11618562,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "PE",
+      "strike": 25000,
+      "atm_open": 25100,
+      "role_vs_open_atm": "OTM+2",
+      "tradingsymbol": "NIFTY26N1725000PE",
+      "instrument_token": 11619074,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "PE",
+      "strike": 25050,
+      "atm_open": 25100,
+      "role_vs_open_atm": "OTM+1",
+      "tradingsymbol": "NIFTY26N1725050PE",
+      "instrument_token": 11619586,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "PE",
+      "strike": 25100,
+      "atm_open": 25100,
+      "role_vs_open_atm": "ATM",
+      "tradingsymbol": "NIFTY26N1725100PE",
+      "instrument_token": 11620098,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "PE",
+      "strike": 25150,
+      "atm_open": 25100,
+      "role_vs_open_atm": "ITM+1",
+      "tradingsymbol": "NIFTY26N1725150PE",
+      "instrument_token": 11620610,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "PE",
+      "strike": 25200,
+      "atm_open": 25100,
+      "role_vs_open_atm": "ITM+2",
+      "tradingsymbol": "NIFTY26N1725200PE",
+      "instrument_token": 11621122,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "PE",
+      "strike": 25250,
+      "atm_open": 25100,
+      "role_vs_open_atm": "ITM+3",
+      "tradingsymbol": "NIFTY26N1725250PE",
+      "instrument_token": 11622658,
+      "expiry": "2026-11-17"
+    },
+    {
+      "side": "PE",
+      "strike": 25300,
+      "atm_open": 25100,
+      "role_vs_open_atm": "ITM+4",
+      "tradingsymbol": "NIFTY26N1725300PE",
+      "instrument_token": 11623170,
+      "expiry": "2026-11-17"
+    }
+  ],
+  "note": "Per-minute ATM = round(spot_close/50)*50; download union of all ATM\u00b15 over the window; CE+PE both sides",
+  "files": {
+    "spot": "NIFTY_SPOT_1m.csv",
+    "combined": "chain_combined_1m.csv",
+    "per_contract": [
+      "NIFTY26N1724600CE_1m.csv",
+      "NIFTY26N1724650CE_1m.csv",
+      "NIFTY26N1724700CE_1m.csv",
+      "NIFTY26N1724750CE_1m.csv",
+      "NIFTY26N1724800CE_1m.csv",
+      "NIFTY26N1724850CE_1m.csv",
+      "NIFTY26N1724900CE_1m.csv",
+      "NIFTY26N1724950CE_1m.csv",
+      "NIFTY26N1725000CE_1m.csv",
+      "NIFTY26N1725050CE_1m.csv",
+      "NIFTY26N1725100CE_1m.csv",
+      "NIFTY26N1725150CE_1m.csv",
+      "NIFTY26N1725200CE_1m.csv",
+      "NIFTY26N1725250CE_1m.csv",
+      "NIFTY26N1725300CE_1m.csv",
+      "NIFTY26N1724600PE_1m.csv",
+      "NIFTY26N1724650PE_1m.csv",
+      "NIFTY26N1724700PE_1m.csv",
+      "NIFTY26N1724750PE_1m.csv",
+      "NIFTY26N1724800PE_1m.csv",
+      "NIFTY26N1724850PE_1m.csv",
+      "NIFTY26N1724900PE_1m.csv",
+      "NIFTY26N1724950PE_1m.csv",
+      "NIFTY26N1725000PE_1m.csv",
+      "NIFTY26N1725050PE_1m.csv",
+      "NIFTY26N1725100PE_1m.csv",
+      "NIFTY26N1725150PE_1m.csv",
+      "NIFTY26N1725200PE_1m.csv",
+      "NIFTY26N1725250PE_1m.csv",
+      "NIFTY26N1725300PE_1m.csv"
+    ],
+    "viewer": "viewer.json"
+  },
+  "n_combined_rows": 10380
+}

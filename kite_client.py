@@ -74,6 +74,17 @@ def save_access_token(access_token: str) -> None:
     TOKEN_FILE.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
+def clear_access_token() -> bool:
+    """Remove local Kite session file. Returns True if a file was deleted."""
+    if not TOKEN_FILE.exists():
+        return False
+    try:
+        TOKEN_FILE.unlink()
+        return True
+    except OSError:
+        return False
+
+
 def load_access_token() -> str | None:
     if not TOKEN_FILE.exists():
         return None

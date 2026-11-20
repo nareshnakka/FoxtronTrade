@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 import time
 from collections import defaultdict, deque
-from datetime import datetime, timedelta
+from datetime import datetime, time as dt_time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -35,6 +35,7 @@ class MarketHub:
         self.last_spot: float | None = None
         self.last_spot_by_id: dict[str, float | None] = {"NIFTY": None, "SENSEX": None}
         self.last_quotes: dict[str, float] = {}
+        self.quote_ts: dict[str, float] = {}
         self.last_data_ts: float | None = None  # last successful Zerodha LTP
         self.watch_tokens: dict[str, int] = {}  # symbol -> instrument_token
         self.watch_meta: dict[str, dict[str, Any]] = {}
@@ -102,14 +103,16 @@ class MarketHub:
         self._stop.set()
 
     def _loop(self) -> None:
-        while not self._stop.is_set():
+        stop = self._stop  # capture — soft-restart may replace self._stop
+        while not stop.is_set():
             t0 = time.time()
             try:
                 self.poll_once()
             except Exception as exc:  # noqa: BLE001
                 self.error = str(exc)
             elapsed = time.time() - t0
-            time.sleep(max(0.2, 1.0 - elapsed))
+            # Snappy LTP for instant algo fire (was ~1s)
+            time.sleep(max(0.08, 0.35 - elapsed))
 
     def _append_point(self, series: deque[tuple[float, float]], ts: float, value: float) -> None:
         """Keep at most one sample per whole second (lightweight-charts needs unique times)."""
@@ -140,7 +143,26 @@ class MarketHub:
                     # Infer from symbol
                     exch = "BFO" if str(sym).upper().startswith("SENSEX") else "NFO"
                 keys.append(f"{exch}:{sym}")
-            quotes = kite.ltp(keys) if keys else {}
+            # Hard-timeout LTP — a hung Kite socket must not freeze market/engine.
+            quotes: dict[str, Any] = {}
+            if keys:
+                box: dict[str, Any] = {"q": {}, "err": None}
+
+                def _ltp() -> None:
+                    try:
+                        box["q"] = kite.ltp(keys) or {}
+                    except Exception as exc:  # noqa: BLE001
+                        box["err"] = exc
+
+                th = threading.Thread(target=_ltp, name="market-ltp", daemon=True)
+                th.start()
+                th.join(timeout=8.0)
+                if th.is_alive():
+                    self.error = "ltp:timeout"
+                    return
+                if box["err"] is not None:
+                    raise box["err"]
+                quotes = box["q"]
 
             spot = quotes.get(NIFTY_SYMBOL, {}).get("last_price")
             sx = quotes.get(SENSEX_SYMBOL, {}).get("last_price") if self.dual_spot else None
@@ -166,6 +188,7 @@ class MarketHub:
                     if lp is None:
                         continue
                     self.last_quotes[sym] = float(lp)
+                    self.quote_ts[sym] = now
                     self._append_point(self.option_series[sym], now, float(lp))
                     got = True
                 if got:
@@ -333,25 +356,15 @@ class MarketHub:
             )
             if day_open is not None:
                 self.day_open = day_open
-        # Minute closes for today only (for momentum vs open)
-        today = datetime.now(IST).date()
-        today_closes: list[float] = []
-        for c in self.nifty_candles_1m or []:
-            dt = c.get("date")
-            if dt is None:
-                continue
-            try:
-                if getattr(dt, "tzinfo", None):
-                    dt = dt.astimezone(IST)
-                if dt.date() != today:
-                    continue
-                today_closes.append(float(c["close"]))
-            except Exception:
-                continue
+        # Minute closes for today only (for momentum vs open). Use the live
+        # merged series so decisions never run on 2-3 minute old candles.
+        today_closes = self.session_closes_live("NIFTY")
         if not today_closes and self.spot_series:
             today_closes = [v for _, v in self.spot_series]
-        ema9_v = ema(closes, 9) if closes else None
-        ema21_v = ema(closes, 21) if closes else None
+        # EMA on the same 1m series the backtest uses (not 5m candles — that
+        # mismatch made live entries far slower than the validated profile).
+        ema9_v = ema(today_closes, 9) if len(today_closes) >= 9 else None
+        ema21_v = ema(today_closes, 21) if len(today_closes) >= 21 else None
         session_trend = compute_session_trend(
             spot=self.last_spot,
             day_open=day_open,
@@ -384,6 +397,58 @@ class MarketHub:
         with self._lock:
             rows = self.spot_series_by_id.get(uid) or self.spot_series
             return [v for _, v in rows]
+
+    def quote_fresh(self, symbol: str, max_age: float = 20.0) -> bool:
+        """False when the poller has not refreshed this symbol recently."""
+        ts = self.quote_ts.get(symbol)
+        return ts is not None and (time.time() - ts) <= max_age
+
+    def _minute_closes_from_ticks(self, uid: str) -> dict[int, float]:
+        today_start = datetime.combine(
+            datetime.now(IST).date(), dt_time.min, tzinfo=IST
+        ).timestamp()
+        with self._lock:
+            rows = list(self.spot_series_by_id.get(uid) or [])
+        out: dict[int, float] = {}
+        for t, v in rows:
+            if t < today_start:
+                continue
+            out[int(t // 60)] = float(v)
+        return out
+
+    def session_closes_live(self, underlying: str = "NIFTY") -> list[float]:
+        """
+        Today's 1-minute closes including the in-progress minute.
+
+        Kite 1m candles are merged with the tick feed resampled to minute
+        closes. The last value is the current LTP, so live analysis sees the
+        same series the minute backtest uses without multi-minute lag.
+        """
+        uid = str(underlying or "NIFTY").upper()
+        rows = self.sensex_candles_1m if uid == "SENSEX" else self.nifty_candles_1m
+        today = datetime.now(IST).date()
+        merged: dict[int, float] = {}
+        for r in rows or []:
+            dt = r.get("date")
+            if dt is None or r.get("close") is None:
+                continue
+            try:
+                if getattr(dt, "tzinfo", None):
+                    dt = dt.astimezone(IST)
+                if dt.date() != today:
+                    continue
+                merged[int(dt.timestamp()) // 60] = float(r["close"])
+            except Exception:
+                continue
+        merged.update(self._minute_closes_from_ticks(uid))
+        if not merged:
+            # No candles yet: fall back to today's ticks only. Yesterday's
+            # closes must never seed the EMA before the open.
+            today_start = datetime.combine(today, dt_time.min, tzinfo=IST).timestamp()
+            with self._lock:
+                rows = list(self.spot_series_by_id.get(uid) or [])
+            return [float(v) for t, v in rows if t >= today_start]
+        return [merged[k] for k in sorted(merged)]
 
     def session_closes_from_candles(self, underlying: str = "NIFTY") -> list[float]:
         """Today's 1m closes for directional analysis (preferred over 1s LTP series)."""

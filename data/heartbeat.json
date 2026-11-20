@@ -1,1 +1,1 @@
-{"ts": 1793731167.2009017, "iso": "2026-11-04T00:09:27", "phase": "tick", "fii_oi_regime": "chop", "fii_oi_smart": "balanced", "fii_block_ce": false, "loop": 1279, "spot": 23810.85, "auth_ok": true, "open_count": 0, "fii_net": -240000.0}
+{"ts": 1795188342.2144382, "iso": "2026-11-20T20:55:42", "tick_ts": null, "tick_iso": null, "phase": "pulse", "pulse": true, "open_count": 0, "live": false}

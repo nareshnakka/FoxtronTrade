@@ -12,14 +12,14 @@ CONFIG_PATH = ROOT / "config.json"
 _DEFAULTS: dict[str, Any] = {
     "live_trading": False,
     # Dual live book: scan Nifty + Sensex, split Zerodha cash, fallback entry
-    "dual_mode": True,
+    "dual_mode": False,
     "dual_underlyings": ["NIFTY", "SENSEX"],
     "dual_max_open": 2,
     "dual_winner_share": 0.70,
     "dual_max_share": 0.55,
     "dual_min_ticket_inr": 8000,
     "dual_deploy_pct": 1.0,
-    "fast_open_mode": True,
+    "fast_open_mode": False,
     # Sensex calendar: Tue/Wed always; Thu = gamma blast only; Mon cutoff
     "sensex_expiry_weekday": 1,
     "sensex_trade_weekdays": [1, 2],
@@ -34,22 +34,30 @@ _DEFAULTS: dict[str, Any] = {
     "sensex_expiry_gamma_min_mom": 40,
     "sensex_block_pre_expiry": True,
     "sensex_pre_expiry_weekday": 0,
-    "algo1_enabled": True,
-    "algo2_enabled": False,
-    "directional_mode": True,
-    "require_convergence": False,
+    "algo1_enabled": False,
+    "algo2_enabled": True,
+    "directional_mode": False,
+    "require_convergence": True,
     "directional_min_confidence": 0.58,
     "directional_min_margin": 0.12,
     "algo1_lots": 1,
     "algo2_lots": 1,
+    # Per-algo capital for sizing (fallback → capital_inr)
+    "algo1_capital_inr": None,
+    "algo2_capital_inr": None,
+    "algo2nw_capital_inr": None,
+    "algo1_deploy_pct": None,
+    "algo2_deploy_pct": None,
+    "algo2nw_deploy_pct": None,
     "lot_size": 75,
-    "premium_low": 125,
-    "premium_high": 145,
+    # Dual 70–80 convergence (live from backtest): buy both, exit both @ 1.45×
+    "premium_low": 70,
+    "premium_high": 77,
     "target_low": 169,
     "target_high": 175,
     "stop_loss": 120,
     "fallen_sl_points": 10,
-    "fallen_bounce_points": 10,
+    "fallen_bounce_points": 12,
     "fallen_pe_roll_enabled": True,
     "fallen_pe_roll_crush_pct": 0.12,
     "fallen_pe_roll_max_premium": 180,
@@ -63,12 +71,154 @@ _DEFAULTS: dict[str, Any] = {
     "link_alert_enabled": True,
     "link_alert_beep_seconds": 5,
     "eod_reset_time": "15:30",
+    # After this IST time (weekdays), stop Zerodha/engine trading work.
+    # Flask stays up for Reports / local option-chain DB / PnL.
+    "kite_idle_after": "15:40",
     "entry_cooldown_minutes": 8,
-    "poll_seconds": 1,
+    "poll_seconds": 0.35,
     "history_seconds": 23400,
     "convergence_tol": 3.0,
     "convergence_zone_gap": 12.0,
     "convergence_zone_min_samples": 15,
+    # Chart pipe: looser gap so theta-tilted merge draws as one channel
+    # Merge window can last 1 minute → ~2 hours — soft breaches grow with length
+    # Calibrated vs visual labels (tools_calibrate_breakout.py)
+    "convergence_pipe_gap": 12.0,
+    "convergence_pipe_min_samples": 2,
+    "convergence_pipe_soft_breach_pct": 0.08,
+    "convergence_pipe_soft_breach_floor": 4,
+    "convergence_pipe_hard_bridge": 2,
+    # Wedge rails (hand-drawn style high/low channel) + rail-break entry
+    "convergence_rail_mode": "band",
+    "algo2_break_on_rail": True,
+    # 3 = require three successive higher prints after rail/hard arm (anti-fake)
+    "algo2_break_confirm_points": 3,
+    "algo2_break_rail_buffer": 1.0,
+    # Opposite-rail reverse while holding breakout: book + flip
+    "algo2_rail_reverse_enabled": True,
+    "algo2_rail_reverse_flip": True,
+    # Fallen hammer/star candle break: book winner + flip into fallen
+    "algo2_fallen_rev_flip": True,
+    # False = buy BOTH CE+PE on in-band merge (dual 70–80 mode)
+    "algo2_breakout_only": False,
+    "algo2_breakout_hard_gap": 12.0,
+    # Enter when winner premium ≥ last convergence mid + this many points
+    "algo2_entry_above_conv_pts": 12.0,
+    # Do not lock / trade merge before this IST time (skip open noise)
+    "algo2_merge_after": "09:20",
+    # Dual hold: arm exit when either leg ≥ this × entry (0 = use TL/book path)
+    "algo2_pair_exit_mult": 1.45,
+    # —— Convergence Next-Week (algo2nw): parallel book, 1 setup/day ——
+    "algo2nw_enabled": True,
+    "algo2nw_premium_low": 46.0,
+    "algo2nw_premium_high": 54.0,
+    "algo2nw_pair_exit_mult": 1.70,
+    "algo2nw_max_setups_per_day": 1,
+    "algo2nw_index_channel_hold": False,
+    "algo2nw_dual_size_from_capital": True,
+    "algo2nw_lots": 1,
+    # First exit: wait for giveback from peak (False = book at 1.45× touch — BT winner)
+    "algo2_pair_exit_wait_retrace": False,
+    "algo2_pair_exit_retrace_min_pct": 5.0,   # start booking once ≥ this giveback from peak
+    "algo2_pair_exit_retrace_max_pct": 30.0,  # force book by this giveback (no deeper wait)
+    # While waiting for retrace: if fallen (loser) reverses, square both immediately
+    "algo2_pair_exit_fallen_reverse_pts": 8.0,
+    "algo2_pair_exit_fallen_reverse_pct": 12.0,
+    # After winner sold: if sold-winner premium reverses down, dump fallen immediately
+    "algo2_pair_sold_reverse_exit": True,
+    "algo2_pair_sold_reverse_pct": 8.0,
+    # If fallen LTP is still below this when winner hits pair-exit, hold it
+    "algo2_pair_hold_fallen_below": 45.0,
+    # Sell held fallen after bounce from its low (points)
+    "algo2_pair_fallen_bounce_min": 5.0,
+    "algo2_pair_fallen_bounce_max": 10.0,
+    # Multi-cycle dual: max completed/open setups per day (3rd was systematically EOD-losing)
+    "algo2_max_setups_per_day": 2,
+    # 2nd dual only: hunt merges at/after this IST clock (1st uses algo2_merge_after only)
+    "algo2_second_entry_after": "11:00",
+    # 2nd dual only: no new merge at/after this IST clock (1st still allowed after 09:20)
+    "algo2_last_entry_before": "13:00",
+    # Skip optional 2nd if today's closed algo2 net already ≥ this (₹); 0 = never skip on P&L
+    "algo2_skip_second_if_day_pnl_ge": 15000.0,
+    # After a closed dual, short cool-down before hunting next merge (pair-exit mode)
+    "algo2_reentry_cooldown_minutes": 1,
+    # Size dual lots from capital×deploy/((CE+PE)×lot) instead of fixed algo2_lots
+    "algo2_dual_size_from_capital": True,
+    # Fallen: exit on reverse +bounce / near mid (ride off by default)
+    "algo2_fallen_ride_enabled": False,
+    # Dual: book when one leg hits top (165–175); edge kept unused by default path
+    "algo2_dual_edge_pts": 12.0,
+    # Winner up-TL / fallen down-TL exits (dotted on chart)
+    "algo2_breakout_tl_enabled": True,
+    "algo2_breakout_tl_buffer": 1.0,
+    "algo2_breakout_tl_lookback": 12,
+    # Rolling bars for CE/PE parallel channel (screenshot-style)
+    "algo2_channel_lookback_bars": 60,
+    # Re-fit CE/PE parallel channels from convergence every N seconds
+    "algo2_channel_replot_seconds": 30,
+    # Index (Nifty) parallel channel + S/R on Nifty chart (dotted)
+    "algo2_index_channel_enabled": True,
+    # Fit Index channel from recent swing trough/peak (~3h of 5m bars), not day open
+    "algo2_index_channel_bars": 48,
+    "algo2_index_channel_tol": 5.0,
+    "algo2_index_sr_count": 4,
+    # Index channel decides stretch past pair-exit (1.45×): ride 2× / 2.5× or trail @1.45×
+    "algo2_index_channel_hold": True,
+    "algo2_index_channel_break_buf": 8.0,
+    "algo2_index_hold_max_mult": 2.5,
+    "algo2_index_hold_stretch_mults": [2.0, 2.5],
+    # Floor trail: once ≥1.45×, never give back below pair-exit; also % giveback from peak
+    "algo2_index_hold_trail_at_pair_exit": True,
+    "algo2_index_hold_giveback_pct": 15.0,
+    # Inside channel: still extend if spot in favorable half (0–1 along lo→hi)
+    "algo2_index_hold_inside_frac": 0.55,
+    # Fit/plot TLs from session open (09:15), even if merge is after 09:20
+    "algo2_breakout_tl_from_day_start": True,
+    # Winner always exits below up-TL. True = also exit fallen on down-TL break.
+    "algo2_breakout_tl_exit_live": False,
+    "algo2_breakout_tl_grace_bars": 5,
+    # Same-day re-merge above the day's first conv mid = upside→decay — skip
+    "algo2_reject_higher_remerge": True,
+    "algo2_higher_remerge_buffer": 2.0,
+    # SL only after breakout leaves merge, then falls back to last convergence mid
+    "algo2_sl_below_convergence": 0.0,
+    "algo2_sl_leave_pts": 1.0,
+    # Soft 168–175 book only when fallen side breaks its channel TL
+    "breakout_book_needs_fallen_tl": True,
+    # Early winner lean — persist / last+ATM (flip-resistant; no majority/cum)
+    "early_winner_lean_enabled": True,
+    "early_winner_lean_add_enabled": True,
+    "early_winner_lean_add_lots": 1,
+    "early_winner_lean_merge_gap": 8.0,
+    "early_winner_lean_lead_pts": 3.0,
+    "early_winner_lean_clear_pts": 2.0,
+    "early_winner_lean_persist": 2,
+    "early_winner_lean_lookback": 5,
+    "early_winner_lean_slope_min": 0.08,
+    "early_winner_lean_spot_roc_min": 0.015,
+    "early_winner_lean_require_spot": False,
+    "early_winner_lean_require_atm": False,
+    # Spot 1m candle: green→CE / red→PE (confirm lean; tie-break dual breaks)
+    "early_winner_lean_candle_confirm": True,
+    "early_winner_lean_require_candle": False,
+    "early_winner_lean_candle_break": True,
+    # ATM + diagonal merge gate before locking 125–145 pair
+    "atm_diag_merge_gate_enabled": True,
+    # False = lock clear 125–145 band merge even when ATM CE/PE still wide
+    "atm_diag_merge_gate_required": False,
+    # Expiry→next-week: if ATM not merged, accept CE(ATM+d)≈PE(ATM−d) X
+    "atm_diag_cross_x_enabled": True,
+    "atm_diag_cross_x_tol": 5.0,
+    "atm_diag_cross_x_depths": [1, 2, 3, 4],
+    # Playback chart overlay (cross-strike X pair; not same-strike ATM)
+    "playback_chart_atm": False,
+    "playback_chart_ce_strike": None,
+    "playback_chart_pe_strike": None,
+    "atm_diag_atm_tol": 3.0,
+    "atm_diag_diag_tol": 5.0,
+    "atm_diag_equal_tol": 5.0,
+    "atm_diag_require_itm": False,
+    "atm_diag_wing_depth": 2,
     "prior_pe": 0.65,
     "algo1_min_confidence": 0.52,
     "exclusive_entries": False,
@@ -78,13 +228,13 @@ _DEFAULTS: dict[str, Any] = {
     # 24×7 unattended: auto TOTP login + heartbeat watchdog
     "unattended_mode": True,
     "unattended_auto_login": True,
-    "heartbeat_max_age_sec": 90,
+    "heartbeat_max_age_sec": 180,
     # Position integrity — OPEN on disk is truth; no fresh entry until squared
     "block_new_while_any_open": True,
     "persist_open_across_restart": True,
     # Sudden spike/fall (seconds) + pre-event sensing → fast scalp
-    "impulse_entry_enabled": True,
-    "pre_event_entry_enabled": True,
+    "impulse_entry_enabled": False,
+    "pre_event_entry_enabled": False,
     "impulse_lookback_sec": 8,
     "impulse_min_pts": 22.0,
     "impulse_min_velocity": 2.2,
@@ -114,8 +264,8 @@ _DEFAULTS: dict[str, Any] = {
     "pre_event_trail_pct": 3.0,
     "pre_event_time_stop_min": 5.0,
     # Wait for premium crush, then enter bounce (CE half-day / PE multi-day / 3-day fall)
-    "post_decay_entry_enabled": True,
-    "post_decay_standalone_entry": True,
+    "post_decay_entry_enabled": False,
+    "post_decay_standalone_entry": False,
     "post_decay_prefer_over_mkt": False,
     "post_decay_ce_half_pct": 50.0,
     "post_decay_pe_crush_pct": 60.0,
@@ -132,10 +282,26 @@ _DEFAULTS: dict[str, Any] = {
     "post_decay_spot_align_pts": 35.0,
     # Lesson 2026-11-02: buy CE on UP-range S/R dip (not ORB high chase)
     "prefer_sr_dip_entry": True,
-    "enable_sr_reclaim": True,
-    "enable_sr_reject": True,
-    "enable_orb_breakout": True,
-    "enable_orb_breakdown": True,
+    "enable_sr_reclaim": False,
+    "enable_sr_reject": False,
+    "enable_orb_breakout": False,
+    "enable_orb_breakdown": False,
+    # Always follow session trend via breakout / breakdown (+ trend-change flips)
+    "enable_trend_follow": False,
+    "trend_follow_entry_after_minutes": 20,
+    "trend_follow_no_entry_after_minutes": 300,
+    "trend_follow_min_break_strength": 0.28,
+    "trend_follow_min_mom": 8.0,
+    "trend_follow_min_vs_open": 25.0,
+    "trend_follow_min_confidence": 0.60,
+    "trend_follow_persist_minutes": 1,
+    "trend_follow_on_change": True,
+    "trend_follow_exit_on_flip": True,
+    "trend_follow_entry_style": "orb",
+    "trend_follow_lookback_minutes": 25,
+    "trend_follow_hold_minutes": 3,
+    "trend_follow_break_buffer_pts": 6,
+    "trend_follow_orb_max_range_pts": 260,
     "post_decay_deny_setups": [],
     "post_decay_allow_setups": None,
     "block_orb_chase_without_retest": True,
@@ -176,7 +342,9 @@ _DEFAULTS: dict[str, Any] = {
     "sr_reclaim_min_mom10": 0.0,
     "sr_soft_no_entry_after_minutes": 200,
     "sr_late_min_vs_open": 45.0,
-    "sr_max_giveback_pts": 100.0,
+    "sr_max_giveback_pts": 55.0,
+    # Hard-UP giveback floor (Nov4 2026 SR knife after ~70pt drop from day high)
+    "sr_hard_max_giveback_pts": 55.0,
     "sr_soft_vs_open": 25.0,
     "sr_soft_min_mom10": 18.0,
     "pe_snapback_lookback": 5,
@@ -195,6 +363,14 @@ _DEFAULTS: dict[str, Any] = {
     "post_decay_reclaim_pe": 0.50,
     "post_decay_reclaim_streak": 0.40,
     "expand_target_mult": 2.5,
+    # Breakout book: premium band first (2.5× rare stretch only)
+    "breakout_premium_target_enabled": True,
+    "breakout_premium_target_low": 168.0,
+    "breakout_premium_target_high": 175.0,
+    "breakout_expand_stretch_enabled": True,
+    "breakout_fallen_rev_exit": True,
+    "breakout_fallen_rev_bar_sec": 30,
+    "breakout_fallen_rev_arm_sec": 180,
     "expand_trail_after_mult": 2.0,
     "crush_cut": 85,
     "late_start_after_minutes": 5,
@@ -256,6 +432,14 @@ _DEFAULTS: dict[str, Any] = {
     "expiry_no_entry_after_minutes": 195,
     "expiry_min_mom": 25.0,
     "expiry_time_stop_minutes": 20,
+    # Live option-chain SQLite recorder (current + next week, ATM±wing)
+    "option_chain_db_enabled": True,
+    "option_chain_db_path": "data/option_chain_live/chain.db",
+    "option_chain_sync_interval_sec": 1,
+    "option_chain_ltp_interval_sec": 10,
+    "option_chain_oi_interval_sec": 60,
+    "option_chain_wing_depth": 20,
+    "option_chain_session_only": True,
     # FII / futures OI short-build vs covering scanner
     "fii_oi_scan_enabled": True,
     "fii_oi_scan_interval_sec": 60,
@@ -301,7 +485,7 @@ _DEFAULTS: dict[str, Any] = {
     "break_buffer_pts": 8,
     "break_hold_minutes": 3,
     # Daily soft PE scalp (flat/chop days primary skips) — learned 2026-11-03
-    "enable_daily_soft_scalp": True,
+    "enable_daily_soft_scalp": False,
     "daily_soft_pe_min_vs_open": 40,
     "daily_soft_max_lots": 8,
     "daily_soft_min_lots": 4,
@@ -327,7 +511,7 @@ _DEFAULTS: dict[str, Any] = {
     # ~11:45 — primary morning window first (protect Oct28-class winners)
     "daily_soft_entry_after_minutes": 150,
     # Timed 10–15pt micro scalp — morning-drive pullback resume (learned 2026-11-03)
-    "enable_micro_scalp": True,
+    "enable_micro_scalp": False,
     "micro_scalp_drive_minutes": 45,
     "micro_scalp_min_drive_pts": 55,
     "micro_scalp_entry_after_minutes": 55,
@@ -351,7 +535,7 @@ _DEFAULTS: dict[str, Any] = {
     "micro_scalp_stop_grace_pct": 3.0,
     "micro_scalp_only_if_flat": True,
     # Daily PA — try most flat sessions via momentum + local S/R
-    "enable_daily_pa": True,
+    "enable_daily_pa": False,
     "daily_pa_only_if_flat": True,
     "daily_pa_entry_after_minutes": 45,
     "daily_pa_no_entry_after_minutes": 270,
@@ -387,6 +571,93 @@ _DEFAULTS: dict[str, Any] = {
     "daily_pa_time_stop_minutes": 14,
     "daily_pa_stop_grace_minutes": 2,
     "daily_pa_stop_grace_pct": 3.5,
+    # ATM CE/PE parallel channel (ascending=long, descending=short bias)
+    # Scan always when enabled; entries respect position_integrity.
+    "atm_channel_enabled": False,
+    "atm_channel_entries": False,
+    # EDGE at channel floor was the 1s scratch machine — off unless confirmed.
+    "atm_channel_allow_edge": False,
+    "atm_channel_prefer_break": True,
+    "atm_channel_edge_persist_ticks": 3,
+    "atm_channel_break_persist_ticks": 2,
+    "atm_channel_reentry_minutes": 20,
+    "atm_channel_scratch_cooldown_minutes": 25,
+    "atm_channel_max_trades_per_day": 4,
+    "atm_channel_min_stop_dist_pct": 1.5,
+    "atm_channel_seed_history": True,
+    "atm_channel_lookback_bars": 90,
+    "atm_channel_pivot_strength": 2,
+    "atm_channel_min_touches": 2,
+    "atm_channel_max_slope_diff": 0.4,
+    "atm_channel_min_abs_slope": 0.012,
+    "atm_channel_min_width_pct": 1.0,
+    "atm_channel_max_width_pct": 22.0,
+    "atm_channel_edge_pct": 18.0,
+    "atm_channel_break_buffer_pct": 0.4,
+    "atm_channel_strike_step": 50,
+    "atm_channel_edge_lots": 1,
+    "atm_channel_edge_max_lots": 4,
+    "atm_channel_break_lots": 2,
+    "atm_channel_break_max_lots": 8,
+    "atm_channel_edge_sl_pct": 1.5,
+    "atm_channel_break_sl_pct": 2.2,
+    "atm_channel_trail_giveback_pct": 1.2,
+    "atm_channel_min_hold_minutes": 5,
+    # PE premium range: lower-edge load + upside breakout (flat or ASC channel)
+    "pe_range_enabled": False,
+    "pe_range_entries": False,
+    "pe_range_allow_edge": True,
+    "pe_range_allow_break": True,
+    "pe_range_seed_history": True,
+    "pe_range_lookback_bars": 90,
+    "pe_range_edge_pct": 20.0,
+    "pe_range_break_buffer_pct": 0.35,
+    "pe_range_min_abs_slope": 0.006,
+    "pe_range_min_width_pct": 2.0,
+    "pe_range_max_width_pct": 28.0,
+    "pe_range_min_touches": 2,
+    "pe_range_edge_persist_ticks": 3,
+    "pe_range_break_persist_ticks": 2,
+    "pe_range_reentry_minutes": 20,
+    "pe_range_scratch_cooldown_minutes": 25,
+    "pe_range_max_trades_per_day": 3,
+    "pe_range_min_hold_minutes": 5,
+    "pe_range_min_stop_dist_pct": 1.5,
+    "pe_range_edge_sl_pct": 1.8,
+    "pe_range_break_sl_pct": 2.2,
+    "pe_range_edge_lots": 1,
+    "pe_range_edge_max_lots": 3,
+    "pe_range_break_lots": 2,
+    "pe_range_break_max_lots": 6,
+    "pe_range_lots": 1,
+    # Every entry: soft exits wait this long; adverse premium pts may cut earlier.
+    # Higher confidence keeps the full loss budget; lower confidence cuts tighter.
+    "entry_min_hold_minutes": 5,
+    "entry_min_hold_loss_points": 10,
+    "entry_min_hold_loss_points_low_conf": 7,
+    "entry_hold_high_confidence": 0.72,
+    "entry_hold_low_confidence": 0.55,
+    # Learned: call side grinds slowly; put side dumps fast.
+    "side_pace_rule_enabled": True,
+    "ce_entry_min_hold_minutes": 8,
+    "pe_entry_min_hold_minutes": 3,
+    "ce_entry_min_hold_loss_points": 12,
+    "ce_entry_min_hold_loss_points_low_conf": 9,
+    "pe_entry_min_hold_loss_points": 8,
+    "pe_entry_min_hold_loss_points_low_conf": 6,
+    "ce_trail_giveback_pct": 5.5,
+    "pe_trail_giveback_pct": 3.0,
+    "ce_atm_trail_giveback_pct": 1.8,
+    "pe_atm_trail_giveback_pct": 0.9,
+    "ce_signal_persist_minutes": 3,
+    "pe_signal_persist_minutes": 1,
+    # Aggressive: skip ORB/shake wait + soft/hard 35/70 expert lockout
+    "loose_entry_mode": False,
+    # Live execution integrity
+    "entry_max_slippage_pct": 2.0,
+    "live_fail_policy": "reject",
+    "live_fill_timeout_sec": 4.0,
+    "strike_select_mode": "atm",
 }
 
 _lock = threading.Lock()

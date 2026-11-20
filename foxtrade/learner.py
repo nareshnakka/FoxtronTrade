@@ -23,7 +23,9 @@ TRAIN_LOG = DATA / "training_log.jsonl"
 LEARN_STATE = DATA / "learning_state.json"
 LESSONS = DATA / "lessons.json"
 
-_lock = threading.Lock()
+# RLock: record_closed_example updates state while already holding this lock.
+# A plain Lock deadlocks there (nested load/save) and freezes the trading loop.
+_lock = threading.RLock()
 
 _DEFAULT_STATE: dict[str, Any] = {
     "updated_at": None,
@@ -70,10 +72,8 @@ def _ensure_files() -> None:
         LESSONS.write_text("[]", encoding="utf-8")
 
 
-def load_learning_state() -> dict[str, Any]:
-    _ensure_files()
-    with _lock:
-        raw = json.loads(LEARN_STATE.read_text(encoding="utf-8"))
+def _load_learning_state_unlocked() -> dict[str, Any]:
+    raw = json.loads(LEARN_STATE.read_text(encoding="utf-8"))
     state = json.loads(json.dumps(_DEFAULT_STATE))
     state.update(raw)
     sw = dict(_DEFAULT_STATE["signal_weights"])
@@ -89,11 +89,21 @@ def load_learning_state() -> dict[str, Any]:
     return state
 
 
+def _save_learning_state_unlocked(state: dict[str, Any]) -> None:
+    state["updated_at"] = _now().isoformat()
+    LEARN_STATE.write_text(json.dumps(state, indent=2, default=str), encoding="utf-8")
+
+
+def load_learning_state() -> dict[str, Any]:
+    _ensure_files()
+    with _lock:
+        return _load_learning_state_unlocked()
+
+
 def save_learning_state(state: dict[str, Any]) -> None:
     _ensure_files()
-    state["updated_at"] = _now().isoformat()
     with _lock:
-        LEARN_STATE.write_text(json.dumps(state, indent=2, default=str), encoding="utf-8")
+        _save_learning_state_unlocked(state)
 
 
 def build_entry_features(
@@ -215,14 +225,16 @@ def record_closed_example(trade: dict[str, Any]) -> dict[str, Any] | None:
     with _lock:
         with TRAIN_LOG.open("a", encoding="utf-8") as f:
             f.write(json.dumps(row, default=str) + "\n")
-        state = load_learning_state()
+        # Unlocked helpers: this block already holds _lock. Calling the public
+        # load/save here deadlocks a plain Lock and stalls every later tick.
+        state = _load_learning_state_unlocked()
         if label in ("RIGHT", "WRONG"):
             key = "right" if label == "RIGHT" else "wrong"
             state["stats"][mode][key] = int(state["stats"][mode].get(key) or 0) + 1
         state["stats"][mode]["pnl"] = round(
             float(state["stats"][mode].get("pnl") or 0) + pnl, 2
         )
-        save_learning_state(state)
+        _save_learning_state_unlocked(state)
     return row
 
 
@@ -429,4 +441,27 @@ def apply_learned_weights(cfg: dict[str, Any]) -> dict[str, Any]:
         "algo1_min_confidence", cfg.get("algo1_min_confidence", 0.52)
     )
     out["signal_weights"] = state.get("signal_weights") or {}
+    # Side-pace rule: CE slow grind / PE fast dump
+    rules = state.get("rules") or {}
+    side_pace = rules.get("side_pace") or {}
+    if side_pace.get("enabled", True):
+        out["side_pace_rule_enabled"] = True
+        for k in (
+            "ce_entry_min_hold_minutes",
+            "pe_entry_min_hold_minutes",
+            "ce_entry_min_hold_loss_points",
+            "ce_entry_min_hold_loss_points_low_conf",
+            "pe_entry_min_hold_loss_points",
+            "pe_entry_min_hold_loss_points_low_conf",
+            "ce_trail_giveback_pct",
+            "pe_trail_giveback_pct",
+            "ce_atm_trail_giveback_pct",
+            "pe_atm_trail_giveback_pct",
+            "ce_signal_persist_minutes",
+            "pe_signal_persist_minutes",
+        ):
+            if k in side_pace and side_pace[k] is not None:
+                out[k] = side_pace[k]
+    elif "enabled" in side_pace:
+        out["side_pace_rule_enabled"] = False
     return out

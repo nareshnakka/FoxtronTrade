@@ -22,10 +22,9 @@ def _nfo_token_map() -> dict[str, int]:
     if _token_cache:
         return _token_cache
     try:
-        from kite_client import get_authenticated_kite
+        from foxtrade.kite_cache import get_instruments
 
-        kite = get_authenticated_kite()
-        inst = kite.instruments("NFO")
+        inst = get_instruments("NFO")
         _token_cache = {
             str(i["tradingsymbol"]): int(i["instrument_token"])
             for i in inst

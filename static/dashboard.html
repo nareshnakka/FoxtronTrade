@@ -53,25 +53,100 @@
       display: inline-flex; align-items: center; gap: 6px;
       padding: 4px 8px; border: 1px solid var(--line); border-radius: 8px;
     }
+    /* Stacked book blocks — no overlapping named-grid rows */
     .grid {
       flex: 1; min-height: 0;
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      grid-template-rows: 1fr 1fr;
-      gap: 6px; padding: 6px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 8px;
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
     }
-    .grid.max-a1 .panel:not([data-panel="a1"]),
-    .grid.max-alog .panel:not([data-panel="alog"]),
-    .grid.max-nifty .panel:not([data-panel="nifty"]),
-    .grid.max-trades .panel:not([data-panel="trades"]) { display: none; }
-    .grid.max-a1, .grid.max-alog, .grid.max-nifty, .grid.max-trades {
-      grid-template-columns: 1fr;
-      grid-template-rows: 1fr;
+    .book-block {
+      flex: 0 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+    }
+    .book-top {
+      display: grid;
+      grid-template-columns: 7fr 3fr;
+      gap: 10px;
+      min-width: 0;
+      height: 460px;
+      max-height: 460px;
+    }
+    .book-top > .panel {
+      min-height: 0;
+      height: 100%;
+      max-height: 100%;
+      overflow: hidden;
     }
     .panel {
       background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
-      display: flex; flex-direction: column; min-height: 0; overflow: hidden;
-      position: relative;
+      display: flex; flex-direction: column; overflow: hidden;
+      position: relative; min-width: 0;
+      isolation: isolate;
+    }
+    .panel[data-panel="trades"],
+    .panel[data-panel="tradesnw"] {
+      height: 340px;
+      max-height: 340px;
+      flex: 0 0 auto;
+    }
+    .panel[data-panel="nifty"] {
+      height: 420px;
+      max-height: 420px;
+      flex: 0 0 auto;
+    }
+    .panel[data-panel="trades"] h2 .left,
+    .panel[data-panel="tradesnw"] h2 .left {
+      flex-wrap: wrap; gap: 4px 8px; flex: 1; min-width: 0;
+    }
+    .panel[data-panel="trades"] h2 .meta,
+    .panel[data-panel="tradesnw"] h2 .meta {
+      max-width: none; white-space: normal;
+    }
+    .panel[data-panel="trades"] .trade-actions,
+    .panel[data-panel="tradesnw"] .trade-actions {
+      flex-shrink: 0; flex-wrap: wrap; gap: 6px;
+    }
+    /* Maximize a single panel */
+    .grid.is-max .book-block,
+    .grid.is-max > .panel { display: none !important; }
+    .grid.is-max .book-block:has(.panel.is-max),
+    .grid.is-max > .panel.is-max {
+      display: flex !important; flex: 1 1 auto; height: auto !important; max-height: none !important;
+      min-height: 0;
+    }
+    .grid.is-max .book-block:has(> .panel.is-max) > .book-top { display: none !important; }
+    .grid.is-max .book-block:has(.book-top > .panel.is-max) > .panel[data-panel="trades"],
+    .grid.is-max .book-block:has(.book-top > .panel.is-max) > .panel[data-panel="tradesnw"] {
+      display: none !important;
+    }
+    .grid.is-max .book-block:has(.panel.is-max) .book-top {
+      display: grid; height: auto; max-height: none; flex: 1; min-height: 0;
+    }
+    .grid.is-max .book-block:has(.panel.is-max) .book-top > .panel:not(.is-max) { display: none !important; }
+    .grid.is-max .book-block:has(.panel.is-max) .book-top > .panel.is-max {
+      grid-column: 1 / -1; height: auto !important; max-height: none !important;
+    }
+    .grid.is-max .book-block:has(> .panel.is-max) > .panel.is-max {
+      height: auto !important; max-height: none !important; flex: 1;
+    }
+    @media (max-width: 1100px) {
+      .book-top {
+        grid-template-columns: 1fr;
+        height: auto;
+        max-height: none;
+      }
+      .book-top > .panel[data-panel="conv"],
+      .book-top > .panel[data-panel="convnw"] { height: 380px; max-height: 380px; }
+      .book-top > .panel[data-panel="alogcw"],
+      .book-top > .panel[data-panel="alognw"] { height: 220px; max-height: 220px; }
     }
     .panel h2 {
       margin: 0; padding: 4px 8px; font-size: 0.78rem; font-weight: 600;
@@ -87,18 +162,43 @@
     }
     .max-btn:hover { border-color: var(--accent); }
     .chart {
-      flex: 1 1 auto; min-height: 180px; width: 100%;
-      position: relative;
+      flex: 1 1 auto; min-height: 0; width: 100%;
+      position: relative; overflow: hidden;
     }
     .chart-hint {
       position: absolute; left: 8px; top: 6px; z-index: 2;
       font-size: 0.65rem; color: #6a7a90; pointer-events: none;
       background: #141c27cc; padding: 1px 6px; border-radius: 4px;
     }
-    .table-wrap { flex: 1; overflow: auto; position: relative; }
-    table.trades-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+    .pe-live-tag {
+      position: absolute; right: 52px; z-index: 3; display: none;
+      pointer-events: none; transform: translateY(-50%);
+      font-family: Consolas, "Cascadia Mono", monospace;
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.01em;
+      color: #0c121a; background: #81c784; border: 1px solid #a5d6a7;
+      padding: 2px 7px; border-radius: 4px; white-space: nowrap;
+      box-shadow: 0 2px 8px #0006;
+    }
+    .pe-live-tag.down { background: #ef9a9a; border-color: #ffcdd2; }
+    .chart-empty {
+      position: absolute; inset: 0; z-index: 1;
+      display: flex; align-items: center; justify-content: center;
+      padding: 0 18px; text-align: center; pointer-events: none;
+      font-size: 0.76rem; line-height: 1.5; color: #8fa0b8;
+    }
+    .table-wrap {
+      flex: 1 1 auto; min-height: 200px; overflow: auto; position: relative;
+      -webkit-overflow-scrolling: touch;
+    }
+    table.trades-table {
+      width: 100%; border-collapse: collapse; font-size: 0.75rem;
+    }
     .trades-table th, .trades-table td {
       padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap;
+    }
+    .trades-table td:nth-child(2),
+    .trades-table th:nth-child(2) {
+      min-width: 96px; font-weight: 650;
     }
     .trades-table th {
       color: var(--muted); position: sticky; top: 0; background: #101826;
@@ -207,6 +307,36 @@
     .activity-bar .st-OUT_OF_WINDOW { color: #6a7a90; }
     .activity-bar .st-IDLE { color: #6a7a90; }
     .activity-bar .headline { color: var(--text); font-weight: 600; }
+    .activity-bar .criteria-live {
+      flex: 1 1 280px; min-width: 200px; max-width: 640px;
+      display: inline-flex; align-items: center; gap: 8px;
+      height: 26px; overflow: hidden; position: relative;
+      border: 1px solid var(--line); border-radius: 6px;
+      background: #0c121a; padding: 0 8px 0 0;
+      font-family: Consolas, "Cascadia Mono", monospace;
+      font-size: 0.68rem; color: #9fb4cc;
+    }
+    .activity-bar .criteria-live .clabel {
+      flex: 0 0 auto; padding: 0 8px; height: 100%;
+      display: inline-flex; align-items: center;
+      font-size: 0.58rem; color: #0c121a; letter-spacing: 0.05em;
+      text-transform: uppercase; font-weight: 700;
+      background: #f0b429; border-right: 1px solid #c4921a;
+    }
+    .activity-bar .criteria-live .cscroll {
+      flex: 1; overflow: hidden; white-space: nowrap; mask-image: linear-gradient(90deg, transparent, #000 8px, #000 calc(100% - 12px), transparent);
+    }
+    .activity-bar .criteria-live .cmarquee {
+      display: inline-block; white-space: nowrap; padding-left: 100%;
+      animation: critMarquee 48s linear infinite;
+      color: #b8d4c8;
+    }
+    .activity-bar .criteria-live .cmarquee b { color: #7dd3c0; font-weight: 650; }
+    .activity-bar .criteria-live .cmarquee .sep { color: #5a6a80; margin: 0 18px; }
+    @keyframes critMarquee {
+      from { transform: translateX(0); }
+      to { transform: translateX(-100%); }
+    }
     .badge.run-on { color: #062; background: #1b3; border-color: #2a5; animation: pulseRun 1.6s ease-in-out infinite; }
     .badge.run-wait { color: #f0b429; background: #3a2210; border-color: #f0b42988; }
     .badge.run-off { color: #8fa0b8; background: #1a222c; border-color: #243041; }
@@ -216,18 +346,31 @@
     }
     .alog {
       flex: 1; overflow: auto; font-family: Consolas, "Cascadia Mono", monospace;
-      font-size: 0.72rem; line-height: 1.45; padding: 8px 10px; background: #0c121a;
+      font-size: 0.68rem; line-height: 1.4; padding: 6px 8px; background: #0c121a;
     }
-    .alog .row { display: grid; grid-template-columns: 64px 56px 1fr; gap: 8px; padding: 2px 0;
-      border-bottom: 1px solid #1a2330; }
-    .alog .ts { color: #6a7a90; }
-    .alog .lvl { text-transform: uppercase; font-weight: 700; }
+    .panel[data-panel="alogcw"] .alog,
+    .panel[data-panel="alognw"] .alog { font-size: 0.64rem; }
+    .alog .row {
+      display: grid; grid-template-columns: 42px 1fr; gap: 4px 6px;
+      padding: 3px 0; border-bottom: 1px solid #1a2330;
+    }
+    .alog .ts { color: #6a7a90; grid-row: 1; }
+    .alog .lvl {
+      text-transform: uppercase; font-weight: 700; font-size: 0.58rem;
+      grid-column: 2; grid-row: 1; justify-self: end; opacity: 0.85;
+    }
     .alog .lvl.tick { color: var(--accent); }
+    .alog .lvl.criteria { color: #f0b429; }
     .alog .lvl.info { color: #7dd3c0; }
     .alog .lvl.error { color: var(--down); }
     .alog .lvl.warn { color: var(--warn); }
-    .alog .msg { color: var(--text); white-space: pre-wrap; word-break: break-word; }
+    .alog .msg {
+      color: var(--text); white-space: pre-wrap; word-break: break-word;
+      grid-column: 1 / -1; grid-row: 2;
+    }
     .alog .empty { color: var(--muted); padding: 16px; text-align: center; }
+    .panel[data-panel="alogcw"] h2 .meta,
+    .panel[data-panel="alognw"] h2 .meta { max-width: 22vw; }
     #settingsModal {
       display: none; position: fixed; inset: 0; background: #000a;
       align-items: center; justify-content: center; z-index: 40;
@@ -235,7 +378,12 @@
     #settingsModal.open { display: flex; }
     .modal {
       background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
-      padding: 16px; width: min(420px, 92vw);
+      padding: 16px; width: min(520px, 94vw); max-height: 88vh; overflow: auto;
+    }
+    .modal h4 { margin: 14px 0 4px; font-size: 0.8rem; letter-spacing: 0.04em; color: var(--accent); }
+    .modal .tog {
+      display: grid; grid-template-columns: 1fr auto; gap: 4px 12px;
+      align-items: center; margin: 4px 0; font-size: 0.82rem;
     }
     .modal label { display: flex; justify-content: space-between; margin: 8px 0; font-size: 0.85rem; }
     .meta { font-size: 0.72rem; color: var(--muted); }
@@ -263,7 +411,6 @@
       border-bottom: 1px solid var(--line); background: #0e1520;
       overflow-x: auto; flex-shrink: 0;
     }
-    .grid.max-a1 .pairs-strip,
     .grid.max-a2 .pairs-strip { max-height: none; flex-wrap: wrap; }
     .pairs-strip .tag {
       font-size: 0.68rem; padding: 2px 7px; border-radius: 999px;
@@ -327,49 +474,149 @@
     <span id="authBadge" class="badge">AUTH —</span>
     <span id="linkBadge" class="badge">LINK —</span>
     <span id="sessionBadge" class="badge">SESSION</span>
+    <span id="kiteIdleBadge" class="badge" title="After 15:40 IST engine idles — Reports still work">ENGINE —</span>
     <span id="spot" class="badge">NIFTY —</span>
     <span id="decayBadge" class="badge">DECAY —</span>
     <span id="macroBadge" class="badge">MACRO —</span>
     <span id="lockBadge" class="badge">LOCK —</span>
     <span id="regimeBadge" class="badge">REGIME —</span>
-    <span id="lateBadge" class="badge">START —</span>
+    <span id="lateBadge" class="badge" title="Start timing + Kite session created">START —</span>
     <span id="capitalBadge" class="badge">CAPITAL —</span>
+    <span id="lotsBadge" class="badge" title="Convergence lots × lot size">LOTS —</span>
     <div class="grow"></div>
     <div class="pnlbar" id="pnlbar"></div>
+    <div class="toggle">
+      <span class="meta">Chain capture</span>
+      <button id="chainCapBtn" class="ok" title="Save current+next week CE/PE ±10 + OI to SQLite. Defaults ON each day.">ON</button>
+    </div>
     <div class="toggle">
       <span class="meta">Live trading</span>
       <button id="liveBtn" class="ok">OFF</button>
     </div>
     <button id="settingsBtn">Settings</button>
+    <button id="logoutBtn" class="danger" title="Clear local Kite session (stops auto-login until you Login again)">Logout</button>
+    <button id="chainFilterBtn" title="Live option chain (Zerodha-style) from capture DB">Option chain</button>
+    <button id="atmPremBtn" title="Live ATM CE/PE premium chart">ATM CE/PE</button>
     <button id="reportsBtn">Reports</button>
   </header>
   <div class="activity-bar" id="activityBar">
     <span class="headline" id="actHeadline">Algo —</span>
     <span class="act" id="actA1">A1 —</span>
+    <span class="act" id="actA2">Convergence CW —</span>
+    <span class="act" id="actA2nw">Convergence NW —</span>
     <span class="act" id="actOpen">Open MTM —</span>
     <span class="act" id="actInvested">Capital used —</span>
+    <div class="criteria-live" id="criteriaLive" title="Matching criteria · 1-line banner · updates every ~3s">
+      <span class="clabel">criteria</span>
+      <div class="cscroll" id="criteriaScroll">
+        <span class="cmarquee" id="criteriaMarquee">waiting for engine…</span>
+      </div>
+    </div>
   </div>
 
   <div class="grid" id="mainGrid">
-    <section class="panel" data-panel="a1">
-      <h2>
-        <span class="left"><span>Live orders — LTP</span><span id="a1msg" class="meta"></span></span>
-        <button type="button" class="max-btn" data-max="a1" title="Maximize">Maximize</button>
-      </h2>
-      <div class="pair-bar" id="a1pair">No open orders</div>
-      <div class="pairs-strip" id="a1pairs"></div>
-      <div id="chartA1" class="chart"><span class="chart-hint">Open orders only · ▲ BUY · ▼ SELL · line drops after exit · Double-click = resync</span></div>
-    </section>
-    <section class="panel" data-panel="alog">
-      <h2>
-        <span class="left">
-          <span>Live algo log</span>
-          <span class="meta" id="alogMeta">what Algo1 is doing right now</span>
-        </span>
-        <button type="button" class="max-btn" data-max="alog" title="Maximize">Maximize</button>
-      </h2>
-      <div class="alog" id="algoLog"><div class="empty">Waiting for engine ticks…</div></div>
-    </section>
+    <div class="book-block" data-book="cw">
+      <div class="book-top">
+        <section class="panel" data-panel="conv">
+          <h2>
+            <span class="left"><span>Algo1 — Current week</span><span id="convmsg" class="meta"></span></span>
+            <button type="button" class="max-btn" data-max="conv" title="Maximize">Maximize</button>
+          </h2>
+          <div class="pair-bar" id="convPair">Waiting for convergence scan…</div>
+          <div class="pairs-strip" id="convPairs"></div>
+          <div id="chartConv" class="chart"><span class="chart-hint">Yellow long-dot = convergence range · light-red short-dot = CE channel · light-green short-dot = PE channel · PE tag shows LTP/±₹</span><div class="pe-live-tag" id="peLiveTag"></div><div class="chart-empty" id="convEmpty">Waiting for ATM + diagonal merge.<br>Then locks highest near-equal premiums in band and plots them.</div></div>
+        </section>
+        <section class="panel" data-panel="alogcw">
+          <h2>
+            <span class="left">
+              <span>CW live log</span>
+              <span class="meta" id="alogMetaCw">—</span>
+            </span>
+            <button type="button" class="max-btn" data-max="alogcw" title="Maximize">Maximize</button>
+          </h2>
+          <div class="alog" id="algoLogCw"><div class="empty">Waiting for CW ticks…</div></div>
+        </section>
+      </div>
+      <section class="panel" data-panel="trades">
+        <h2>
+          <span class="left">
+            <span>Entries / Live P&amp;L — Algo1 (Current week)</span>
+            <span class="meta" id="entryModeTabs" style="margin-left:10px;display:inline-flex;gap:6px">
+              <button type="button" class="ok" data-emode="all" id="emodeAll">All</button>
+              <button type="button" data-emode="paper" id="emodePaper">Paper</button>
+              <button type="button" data-emode="live" id="emodeLive">Live</button>
+            </span>
+            <span class="meta" id="entriesMeta">algo2 today</span>
+          </span>
+          <button type="button" class="max-btn" data-max="trades" title="Maximize">Maximize</button>
+        </h2>
+        <div class="trade-actions">
+          <span class="meta" id="tradeSelMeta">0 selected</span>
+          <button type="button" id="btnSelAllOpen">Select all open</button>
+          <button type="button" id="btnClearSel">Clear selection</button>
+          <button type="button" class="danger" id="btnSquareSelected" disabled>Square-off selected @ MKT</button>
+          <button type="button" class="danger" id="btnSquareAllOpen">Square-off ALL open @ MKT</button>
+        </div>
+        <div id="tradeFilterChips" class="filter-chipbar"></div>
+        <div class="table-wrap" id="tradesTableWrap">
+          <table class="trades-table" id="tradesTable">
+            <thead>
+              <tr id="tradesHeadRow"></tr>
+            </thead>
+            <tbody id="tradesBody"></tbody>
+          </table>
+          <div id="tradeFilterPop" class="filter-pop" role="dialog" aria-label="Column filter"></div>
+        </div>
+      </section>
+    </div>
+
+    <div class="book-block" data-book="nw">
+      <div class="book-top">
+        <section class="panel" data-panel="convnw">
+          <h2>
+            <span class="left"><span>Algo2 — Next week 46–54 @ 1.70×</span><span id="convnwmsg" class="meta"></span></span>
+            <button type="button" class="max-btn" data-max="convnw" title="Maximize">Maximize</button>
+          </h2>
+          <div class="pair-bar" id="convnwPair">Waiting for next-week scan…</div>
+          <div class="pairs-strip" id="convnwPairs"></div>
+          <div id="chartConvNw" class="chart"><span class="chart-hint">Same channels / pipe as CW · NW book · max 1 setup · no second merge</span><div class="pe-live-tag" id="peLiveTagNw"></div><div class="chart-empty" id="convnwEmpty">Waiting for next-week CE/PE merge in 46–54 band.</div></div>
+        </section>
+        <section class="panel" data-panel="alognw">
+          <h2>
+            <span class="left">
+              <span>NW live log</span>
+              <span class="meta" id="alogMetaNw">—</span>
+            </span>
+            <button type="button" class="max-btn" data-max="alognw" title="Maximize">Maximize</button>
+          </h2>
+          <div class="alog" id="algoLogNw"><div class="empty">Waiting for NW ticks…</div></div>
+        </section>
+      </div>
+      <section class="panel" data-panel="tradesnw">
+        <h2>
+          <span class="left">
+            <span>Entries / Live P&amp;L — Algo2 (Next week)</span>
+            <span class="meta" id="entriesMetaNw">algo2nw today</span>
+          </span>
+          <button type="button" class="max-btn" data-max="tradesnw" title="Maximize">Maximize</button>
+        </h2>
+        <div class="trade-actions">
+          <span class="meta" id="tradeSelMetaNw">0 selected</span>
+          <button type="button" id="btnSelAllOpenNw">Select all open</button>
+          <button type="button" id="btnClearSelNw">Clear selection</button>
+          <button type="button" class="danger" id="btnSquareSelectedNw" disabled>Square-off selected @ MKT</button>
+        </div>
+        <div class="table-wrap" id="tradesNwTableWrap">
+          <table class="trades-table" id="tradesNwTable">
+            <thead>
+              <tr id="tradesNwHeadRow"></tr>
+            </thead>
+            <tbody id="tradesNwBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+
     <section class="panel" data-panel="nifty">
       <h2>
         <span class="left"><span>Nifty 50 — Day Candles</span><span id="idxmsg" class="meta"></span></span>
@@ -377,53 +624,43 @@
       </h2>
       <div id="chartNifty" class="chart"><span class="chart-hint">Window = today 09:15→now IST · Drag history · Double-click = resync</span></div>
     </section>
-    <section class="panel" data-panel="trades">
-      <h2>
-        <span class="left">
-          <span>Entries / Live P&amp;L</span>
-          <span class="meta" id="entryModeTabs" style="margin-left:10px;display:inline-flex;gap:6px">
-            <button type="button" class="ok" data-emode="all" id="emodeAll">All</button>
-            <button type="button" data-emode="paper" id="emodePaper">Paper</button>
-            <button type="button" data-emode="live" id="emodeLive">Live</button>
-          </span>
-          <span class="meta" id="entriesMeta">today only · full history in Reports · select OPEN to square-off</span>
-        </span>
-        <button type="button" class="max-btn" data-max="trades" title="Maximize">Maximize</button>
-      </h2>
-      <div class="trade-actions">
-        <span class="meta" id="tradeSelMeta">0 selected</span>
-        <button type="button" id="btnSelAllOpen">Select all open</button>
-        <button type="button" id="btnClearSel">Clear selection</button>
-        <button type="button" class="danger" id="btnSquareSelected" disabled>Square-off selected @ MKT</button>
-        <button type="button" class="danger" id="btnSquareAllOpen">Square-off ALL open @ MKT</button>
-      </div>
-      <div id="tradeFilterChips" class="filter-chipbar"></div>
-      <div class="table-wrap" id="tradesTableWrap">
-        <table class="trades-table" id="tradesTable">
-          <thead>
-            <tr id="tradesHeadRow"></tr>
-          </thead>
-          <tbody id="tradesBody"></tbody>
-        </table>
-        <div id="tradeFilterPop" class="filter-pop" role="dialog" aria-label="Column filter"></div>
-      </div>
-    </section>
   </div>
 
   <div id="toast"></div>
 
   <div id="settingsModal">
     <div class="modal">
-      <h3 style="margin-top:0">Capital &amp; auto trade</h3>
-      <p class="meta" style="margin:0 0 10px">Lots are auto-packed. Set capital + deploy % only.</p>
-      <label>Trading capital ₹ <input id="s_capital" type="number" min="25000" max="5000000" step="5000" /></label>
-      <label>Auto deploy % of capital
-        <input id="s_deploy" type="number" min="50" max="100" step="1" />
+      <h3 style="margin-top:0">Capital by Algo</h3>
+      <p class="meta" style="margin:0 0 10px">Each book sizes lots from its own capital × deploy. Shared fallback used if a field is blank.</p>
+      <label>Algo1 (FastTrack) capital ₹
+        <input id="s_a1cap" type="number" min="25000" max="5000000" step="5000" />
       </label>
-      <p class="meta" id="s_deployHint" style="margin:4px 0 10px">Each entry uses this % of available capital (premium × qty). Production default 100%.</p>
-      <label>Algo1 enabled <input id="s_a1en" type="checkbox" /></label>
-      <label>Algo2 enabled <input id="s_a2en" type="checkbox" /></label>
+      <label>Algo1 deploy %
+        <input id="s_a1dep" type="number" min="50" max="100" step="1" />
+      </label>
+      <label>Algo2 (Convergence CW) capital ₹
+        <input id="s_a2cap" type="number" min="25000" max="5000000" step="5000" />
+      </label>
+      <label>Algo2 deploy %
+        <input id="s_a2dep" type="number" min="50" max="100" step="1" />
+      </label>
+      <label>Next-Week Convergence capital ₹
+        <input id="s_a2nwcap" type="number" min="25000" max="5000000" step="5000" />
+      </label>
+      <label>Next-Week deploy %
+        <input id="s_a2nwdep" type="number" min="50" max="100" step="1" />
+      </label>
+      <p class="meta" id="s_deployHint" style="margin:4px 0 10px">Shared fallback capital (legacy) also saved for older paths.</p>
+      <label>Shared fallback capital ₹ <input id="s_capital" type="number" min="25000" max="5000000" step="5000" /></label>
+      <label>Convergence lots (fixed override when capital-sizing off)
+        <input id="s_a2lots" type="number" min="1" max="15" step="1" />
+      </label>
+      <p class="meta" id="s_lotsHint" style="margin:4px 0 10px">Qty = lots × lot size (Nifty 75) when not sizing from capital.</p>
       <label>Max trades / day <input id="s_max" type="number" min="1" max="10" /></label>
+      <h4>ALGOS</h4>
+      <p class="meta" style="margin:0 0 6px">Convergence books buy CE+PE on merge; NW is a separate 46–54 @ 1.70× book.</p>
+      <label class="tog">Convergence Algo (current week) <input id="s_a2en" type="checkbox" /></label>
+      <label class="tog">Convergence Next-Week (46–54 @ 1.70×) <input id="s_a2nwen" type="checkbox" /></label>
       <div class="row" style="margin-top:12px; justify-content:flex-end">
         <button id="closeSettings">Cancel</button>
         <button id="saveSettings" class="ok">Save</button>
@@ -434,8 +671,9 @@
 
   <script>
     const chartScroll = {
-      a1: { fitted: false, preserve: false, pairKey: "", applying: false, savedLogical: null },
       nifty: { fitted: false, preserve: false, pairKey: "nifty", applying: false, savedLogical: null },
+      conv: { fitted: false, preserve: false, pairKey: "", applying: false, savedLogical: null },
+      convnw: { fitted: false, preserve: false, pairKey: "", applying: false, savedLogical: null },
     };
 
     const IST_TZ = "Asia/Kolkata";
@@ -574,7 +812,10 @@
         crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
       });
       const resize = () => {
-        chart.applyOptions({ width: el.clientWidth, height: Math.max(el.clientHeight, 160) });
+        // Fit the panel — never force taller than the container (clips under overflow:hidden).
+        const w = Math.max(el.clientWidth || 0, 1);
+        const h = Math.max(el.clientHeight || 0, 1);
+        chart.applyOptions({ width: w, height: h });
       };
       window.addEventListener("resize", resize);
       const ro = new ResizeObserver(resize);
@@ -629,26 +870,9 @@
       // Never scrollToRealTime on poll — that yanked the view to the right edge
     }
 
-    const c1 = mkChart(document.getElementById("chartA1"), "a1");
     const cN = mkChart(document.getElementById("chartNifty"), "nifty");
-
-    const LS = LightweightCharts.LineStyle;
-    const ORDER_COLORS = ["#3d9cf0", "#f0b429", "#a78bfa", "#26a69a", "#fb7185", "#34d399", "#f97316", "#60a5fa"];
-    const orderLineOpts = {
-      lineWidth: 2,
-      lastValueVisible: true,
-      priceLineVisible: false,
-      crosshairMarkerVisible: true,
-      priceFormat: { type: "price", precision: 1, minMove: 0.1 },
-    };
-    /** @type {Map<string, { series: any, color: string, priceLine: any|null, symbol: string }>} */
-    const orderSeriesMap = new Map();
-    /** Just-closed lines kept briefly so SELL marker is visible, then removed. */
-    /** @type {Map<string, { until: number, color: string, series: any, priceLine: any|null, trade: any, points: any[] }>} */
-    const fadingClosed = new Map();
-    /** Last known LTP series per trade id (for sell fade when server drops the open). */
-    const lastOrderPoints = new Map();
-    let orderColorIdx = 0;
+    const cC = mkChart(document.getElementById("chartConv"), "conv");
+    const cCnw = mkChart(document.getElementById("chartConvNw"), "convnw");
 
     const nifty = cN.addCandlestickSeries({
       upColor: "#26a69a", downColor: "#ef5350",
@@ -657,28 +881,810 @@
       lastValueVisible: true,
       priceLineVisible: false,
     });
+    // Index parallel channel + S/R — all dotted
+    const IX_CH = "rgba(100,181,246,0.95)";
+    const IX_RES = "rgba(239,83,80,0.75)";
+    const IX_SUP = "rgba(38,166,154,0.75)";
+    const ixLineOpts = {
+      lineWidth: 2,
+      lastValueVisible: false,
+      priceLineVisible: false,
+      crosshairMarkerVisible: false,
+      priceFormat: { type: "price", precision: 1, minMove: 0.05 },
+    };
+    // No area fill on Index — it fights candle autoscale and looked like a dark box
+    const ixChHiSeries = cN.addLineSeries({
+      ...ixLineOpts, color: IX_CH, lineStyle: LightweightCharts.LineStyle.Dotted,
+    });
+    const ixChLoSeries = cN.addLineSeries({
+      ...ixLineOpts, color: IX_CH, lineStyle: LightweightCharts.LineStyle.Dotted,
+    });
+    const ixSrSeries = [];
+    function ensureIxSrSeries(n) {
+      while (ixSrSeries.length < n) {
+        const isRes = ixSrSeries.length % 2 === 0;
+        ixSrSeries.push(cN.addLineSeries({
+          ...ixLineOpts,
+          lineWidth: 1,
+          color: isRes ? IX_RES : IX_SUP,
+          lineStyle: LightweightCharts.LineStyle.Dotted,
+        }));
+      }
+      return ixSrSeries;
+    }
+    function setIndexOverlay(ov) {
+      const mapPts = (pts) =>
+        (pts || [])
+          .filter((p) => p && p.time != null && Number.isFinite(Number(p.value)))
+          .map((p) => ({ time: p.time, value: Number(p.value) }));
+      try {
+        const hi = mapPts(ov && ov.ch_hi_points);
+        const lo = mapPts(ov && ov.ch_lo_points);
+        ixChHiSeries.setData(hi);
+        ixChLoSeries.setData(lo);
+        const srRows = [];
+        for (const r of (ov && ov.resistance) || []) {
+          srRows.push({ kind: "R", pts: mapPts(r.points) });
+        }
+        for (const s of (ov && ov.support) || []) {
+          srRows.push({ kind: "S", pts: mapPts(s.points) });
+        }
+        const series = ensureIxSrSeries(Math.max(srRows.length, 8));
+        for (let i = 0; i < series.length; i++) {
+          const row = srRows[i];
+          series[i].applyOptions({
+            color: row && row.kind === "R" ? IX_RES : IX_SUP,
+          });
+          series[i].setData(row ? row.pts : []);
+        }
+      } catch (err) {
+        console.warn("index overlay", err);
+      }
+    }
+
+    const convLineOpts = {
+      lineWidth: 2,
+      lastValueVisible: true,
+      priceLineVisible: false,
+      crosshairMarkerVisible: true,
+      priceFormat: { type: "price", precision: 1, minMove: 0.1 },
+    };
+    const convCeSeries = cC.addLineSeries({ ...convLineOpts, color: "#ef5350" });
+    const convPeSeries = cC.addLineSeries({
+      ...convLineOpts,
+      color: "#26a69a",
+      // Default last-value hidden — pePnlLine shows "80/+2000" on the axis
+      lastValueVisible: false,
+    });
+    let pePnlLine = null;
+    // Convergence pipe / merge range — long dotted yellow
+    const pipeLineOpts = {
+      lineWidth: 1,
+      lastValueVisible: false,
+      priceLineVisible: false,
+      crosshairMarkerVisible: false,
+      priceFormat: { type: "price", precision: 1, minMove: 0.1 },
+    };
+    const CONV_YELLOW = "rgba(240,180,41,0.95)";
+    const CE_CH_LIGHT = "rgba(255,138,128,0.95)";   // short-dotted light red
+    const PE_CH_LIGHT = "rgba(129,199,132,0.95)";   // short-dotted light green
+    const pipeHighSeries = cC.addLineSeries({
+      ...pipeLineOpts,
+      color: CONV_YELLOW,
+      lineWidth: 2,
+      lineStyle: LightweightCharts.LineStyle.SparseDotted,
+    });
+    const pipeMidSeries = cC.addLineSeries({
+      ...pipeLineOpts,
+      color: "rgba(240,180,41,0.55)",
+      lineStyle: LightweightCharts.LineStyle.SparseDotted,
+    });
+    const pipeLowSeries = cC.addLineSeries({
+      ...pipeLineOpts,
+      color: CONV_YELLOW,
+      lineWidth: 2,
+      lineStyle: LightweightCharts.LineStyle.SparseDotted,
+    });
+    // Parallel CE/PE channels — short dotted light red / light green
+    const ceChFill = cC.addAreaSeries({
+      topColor: "rgba(255,138,128,0.14)",
+      bottomColor: "rgba(255,138,128,0.02)",
+      lineColor: "rgba(255,138,128,0.01)",
+      lineWidth: 1,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
+    const peChFill = cC.addAreaSeries({
+      topColor: "rgba(129,199,132,0.14)",
+      bottomColor: "rgba(129,199,132,0.02)",
+      lineColor: "rgba(129,199,132,0.01)",
+      lineWidth: 1,
+      priceLineVisible: false,
+      lastValueVisible: false,
+    });
+    const ceChHiSeries = cC.addLineSeries({
+      ...pipeLineOpts, color: CE_CH_LIGHT, lineWidth: 2,
+      lineStyle: LightweightCharts.LineStyle.Dotted,
+    });
+    const ceChLoSeries = cC.addLineSeries({
+      ...pipeLineOpts, color: CE_CH_LIGHT, lineWidth: 2,
+      lineStyle: LightweightCharts.LineStyle.Dotted,
+    });
+    const peChHiSeries = cC.addLineSeries({
+      ...pipeLineOpts, color: PE_CH_LIGHT, lineWidth: 2,
+      lineStyle: LightweightCharts.LineStyle.Dotted,
+    });
+    const peChLoSeries = cC.addLineSeries({
+      ...pipeLineOpts, color: PE_CH_LIGHT, lineWidth: 2,
+      lineStyle: LightweightCharts.LineStyle.Dotted,
+    });
+    let mergeBandHiLine = null;
+    let mergeBandLoLine = null;
+    // Keep winner/fallen dotted TLs as exit overlays
+    const tlUpSeries = cC.addLineSeries({
+      ...pipeLineOpts,
+      color: "rgba(61,156,240,0.85)",
+      lineWidth: 2,
+      lineStyle: LightweightCharts.LineStyle.Dotted,
+    });
+    const tlWDnSeries = cC.addLineSeries({
+      ...pipeLineOpts,
+      color: "rgba(100,181,246,0.65)",
+      lineWidth: 1,
+      lineStyle: LightweightCharts.LineStyle.Dotted,
+    });
+    const tlDownSeries = cC.addLineSeries({
+      ...pipeLineOpts,
+      color: "rgba(186,104,200,0.85)",
+      lineWidth: 2,
+      lineStyle: LightweightCharts.LineStyle.Dotted,
+    });
+    const tlFUpSeries = cC.addLineSeries({
+      ...pipeLineOpts,
+      color: "rgba(171,71,188,0.65)",
+      lineWidth: 1,
+      lineStyle: LightweightCharts.LineStyle.Dotted,
+    });
+    for (const lvl of [125, 145]) {
+      convCeSeries.createPriceLine({
+        price: lvl,
+        color: "#4b5d75",
+        lineWidth: 1,
+        lineStyle: LightweightCharts.LineStyle.Dashed,
+        axisLabelVisible: true,
+        title: "band",
+      });
+    }
+
+    // —— Next-week convergence chart (mirror CW channels / pipe / TLs) ——
+    const nwConvCeSeries = cCnw.addLineSeries({ ...convLineOpts, color: "#ef5350" });
+    const nwConvPeSeries = cCnw.addLineSeries({
+      ...convLineOpts, color: "#26a69a", lastValueVisible: false,
+    });
+    const nwPipeHighSeries = cCnw.addLineSeries({
+      ...pipeLineOpts, color: CONV_YELLOW, lineWidth: 2,
+      lineStyle: LightweightCharts.LineStyle.SparseDotted,
+    });
+    const nwPipeMidSeries = cCnw.addLineSeries({
+      ...pipeLineOpts, color: "rgba(240,180,41,0.55)",
+      lineStyle: LightweightCharts.LineStyle.SparseDotted,
+    });
+    const nwPipeLowSeries = cCnw.addLineSeries({
+      ...pipeLineOpts, color: CONV_YELLOW, lineWidth: 2,
+      lineStyle: LightweightCharts.LineStyle.SparseDotted,
+    });
+    const nwCeChFill = cCnw.addAreaSeries({
+      topColor: "rgba(255,138,128,0.14)", bottomColor: "rgba(255,138,128,0.02)",
+      lineColor: "rgba(255,138,128,0.01)", lineWidth: 1,
+      priceLineVisible: false, lastValueVisible: false,
+    });
+    const nwPeChFill = cCnw.addAreaSeries({
+      topColor: "rgba(129,199,132,0.14)", bottomColor: "rgba(129,199,132,0.02)",
+      lineColor: "rgba(129,199,132,0.01)", lineWidth: 1,
+      priceLineVisible: false, lastValueVisible: false,
+    });
+    const nwCeChHiSeries = cCnw.addLineSeries({
+      ...pipeLineOpts, color: CE_CH_LIGHT, lineWidth: 2,
+      lineStyle: LightweightCharts.LineStyle.Dotted,
+    });
+    const nwCeChLoSeries = cCnw.addLineSeries({
+      ...pipeLineOpts, color: CE_CH_LIGHT, lineWidth: 2,
+      lineStyle: LightweightCharts.LineStyle.Dotted,
+    });
+    const nwPeChHiSeries = cCnw.addLineSeries({
+      ...pipeLineOpts, color: PE_CH_LIGHT, lineWidth: 2,
+      lineStyle: LightweightCharts.LineStyle.Dotted,
+    });
+    const nwPeChLoSeries = cCnw.addLineSeries({
+      ...pipeLineOpts, color: PE_CH_LIGHT, lineWidth: 2,
+      lineStyle: LightweightCharts.LineStyle.Dotted,
+    });
+    const nwTlUpSeries = cCnw.addLineSeries({
+      ...pipeLineOpts, color: "rgba(61,156,240,0.85)", lineWidth: 2,
+      lineStyle: LightweightCharts.LineStyle.Dotted,
+    });
+    const nwTlWDnSeries = cCnw.addLineSeries({
+      ...pipeLineOpts, color: "rgba(100,181,246,0.65)", lineWidth: 1,
+      lineStyle: LightweightCharts.LineStyle.Dotted,
+    });
+    const nwTlDownSeries = cCnw.addLineSeries({
+      ...pipeLineOpts, color: "rgba(186,104,200,0.85)", lineWidth: 2,
+      lineStyle: LightweightCharts.LineStyle.Dotted,
+    });
+    const nwTlFUpSeries = cCnw.addLineSeries({
+      ...pipeLineOpts, color: "rgba(171,71,188,0.65)", lineWidth: 1,
+      lineStyle: LightweightCharts.LineStyle.Dotted,
+    });
+    for (const lvl of [46, 54]) {
+      nwConvCeSeries.createPriceLine({
+        price: lvl, color: "#4b5d75", lineWidth: 1,
+        lineStyle: LightweightCharts.LineStyle.Dashed,
+        axisLabelVisible: true, title: "band",
+      });
+    }
+    let nwPairTgtLines = [];
+    let nwMergeBandHiLine = null;
+    let nwMergeBandLoLine = null;
+    let nwConvSlLine = null;
+    let nwConvZoneLines = [];
+    let nwFrozenPipePts = null;
+    let nwConvHadData = false;
+    let nwPePnlLine = null;
+
+    // Dynamic targets from entry × ladder (1.45 / 2.0 / 2.5) — no fixed 168–175
+    let pairTgtLines = [];
+    function setPairExitTargets(st, a2, opts) {
+      const o = opts || {};
+      const ceSeries = o.ceSeries || convCeSeries;
+      const peSeries = o.peSeries || convPeSeries;
+      const floor = Number(
+        o.exitMult
+        ?? (o.nw ? st.config?.algo2nw_pair_exit_mult : null)
+        ?? st.config?.algo2_pair_exit_mult
+        ?? 1.45
+      );
+      const stretch = Array.isArray(st.config?.algo2_index_hold_stretch_mults)
+        ? st.config.algo2_index_hold_stretch_mults.map(Number).filter((x) => Number.isFinite(x) && x > 0)
+        : [2.0, 2.5];
+      const maxM = Number(st.config?.algo2_index_hold_max_mult || 2.5);
+      const mults = [...new Set([floor, ...stretch, maxM].filter((x) => Number.isFinite(x) && x > 0))]
+        .sort((a, b) => a - b);
+      const ceEntry = Number(a2.ce_entry ?? a2.ce?.entry);
+      const peEntry = Number(a2.pe_entry ?? a2.pe?.entry);
+      let bag = o.nw ? nwPairTgtLines : pairTgtLines;
+      try {
+        for (const ln of bag) {
+          try { ln.series.removePriceLine(ln.line); } catch (_) {}
+        }
+      } catch (_) {}
+      bag = [];
+      if (o.nw) nwPairTgtLines = bag; else pairTgtLines = bag;
+      const add = (series, entry, color, side) => {
+        if (!Number.isFinite(entry) || entry <= 0) return;
+        for (const m of mults) {
+          const px = +(entry * m).toFixed(2);
+          const line = series.createPriceLine({
+            price: px,
+            color,
+            lineWidth: m <= floor + 1e-6 ? 2 : 1,
+            lineStyle: LightweightCharts.LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: `${side} ${m}×`,
+          });
+          bag.push({ series, line });
+        }
+      };
+      add(ceSeries, ceEntry, "rgba(239,83,80,0.85)", "CE");
+      add(peSeries, peEntry, "rgba(38,166,154,0.85)", "PE");
+    }
+    let convSlLine = null;
+    let convZoneLines = [];
+    let frozenPipePts = null;
+    function fitPipeFromSeries(pts, gapTol) {
+      // Client fallback: long merge (1m–2h) with soft gap bridges
+      if (!pts || pts.length < 4) return null;
+      const hardGap = gapTol * 1.85;
+      let best = null;
+      for (let i = 0; i < pts.length; i++) {
+        if (Math.abs(pts[i].ce - pts[i].pe) > gapTol) continue;
+        let j = i;
+        let soft = 0;
+        let hardBridge = 0;
+        while (j < pts.length) {
+          const g = Math.abs(pts[j].ce - pts[j].pe);
+          const len = j - i + 1;
+          const maxSoft = Math.min(40, Math.max(8, Math.floor(len * 0.12)));
+          if (g <= gapTol) { hardBridge = 0; j++; continue; }
+          if (g > hardGap) {
+            if (hardBridge < 2 && j + 1 < pts.length &&
+                Math.abs(pts[j + 1].ce - pts[j + 1].pe) <= hardGap) {
+              hardBridge++; soft++;
+              if (soft > maxSoft) break;
+              j++; continue;
+            }
+            break;
+          }
+          hardBridge = 0;
+          if (soft >= maxSoft) break;
+          soft++; j++;
+        }
+        while (j > i && Math.abs(pts[j - 1].ce - pts[j - 1].pe) > gapTol) j--;
+        if (j - i >= 4) {
+          const seg = pts.slice(i, j);
+          const mids = seg.map((p) => (p.ce + p.pe) / 2);
+          const n = mids.length;
+          let sx = 0, sy = 0, sxy = 0, sxx = 0;
+          for (let k = 0; k < n; k++) { sx += k; sy += mids[k]; }
+          const mx = sx / n, my = sy / n;
+          for (let k = 0; k < n; k++) { sxy += (k - mx) * (mids[k] - my); sxx += (k - mx) * (k - mx); }
+          const slope = sxy / (sxx || 1e-9);
+          const intercept = my - slope * mx;
+          const exc = [];
+          for (let k = 0; k < n; k++) {
+            const fit = intercept + slope * k;
+            exc.push(Math.abs(seg[k].ce - fit), Math.abs(seg[k].pe - fit));
+          }
+          exc.sort((a, b) => a - b);
+          let hw = Math.max(2, exc[Math.min(exc.length - 1, Math.floor(exc.length * 0.9))] * 1.08);
+          const rails = seg.map((p, k) => {
+            const mid = intercept + slope * k;
+            return { time: p.time, high: mid + hw, mid, low: mid - hw };
+          });
+          if (!best || rails.length > best.length) best = rails;
+        }
+        i = Math.max(j, i + 1);
+      }
+      return best;
+    }
+    function setConvTrendlines(zone, opts) {
+      const nw = !!(opts && opts.nw);
+      const S = nw
+        ? {
+            ce: nwConvCeSeries, pe: nwConvPeSeries,
+            ceHi: nwCeChHiSeries, ceLo: nwCeChLoSeries,
+            peHi: nwPeChHiSeries, peLo: nwPeChLoSeries,
+            ceFill: nwCeChFill, peFill: nwPeChFill,
+            tlUp: nwTlUpSeries, tlWDn: nwTlWDnSeries,
+            tlDown: nwTlDownSeries, tlFUp: nwTlFUpSeries,
+          }
+        : {
+            ce: convCeSeries, pe: convPeSeries,
+            ceHi: ceChHiSeries, ceLo: ceChLoSeries,
+            peHi: peChHiSeries, peLo: peChLoSeries,
+            ceFill: ceChFill, peFill: peChFill,
+            tlUp: tlUpSeries, tlWDn: tlWDnSeries,
+            tlDown: tlDownSeries, tlFUp: tlFUpSeries,
+          };
+      const mapPts = (pts) =>
+        (pts || [])
+          .filter((p) => p && p.time != null && Number.isFinite(Number(p.value)))
+          .map((p) => ({ time: p.time, value: Number(p.value) }));
+      const midFill = (hiPts, loPts) => {
+        const byT = {};
+        for (const p of mapPts(hiPts)) byT[p.time] = { ...(byT[p.time] || {}), hi: p.value, time: p.time };
+        for (const p of mapPts(loPts)) byT[p.time] = { ...(byT[p.time] || {}), lo: p.value, time: p.time };
+        return Object.values(byT)
+          .filter((p) => p.hi != null && p.lo != null)
+          .map((p) => ({ time: p.time, value: (p.hi + p.lo) / 2 }))
+          .sort((a, b) => a.time - b.time);
+      };
+      try {
+        const ceHi = mapPts((zone && zone.ce_ch_hi_points) || (zone && zone.tl_w_dn_points) || []);
+        const ceLo = mapPts((zone && zone.ce_ch_lo_points) || (zone && zone.tl_up_points) || []);
+        const peHi = mapPts((zone && zone.pe_ch_hi_points) || (zone && zone.tl_down_points) || []);
+        const peLo = mapPts((zone && zone.pe_ch_lo_points) || (zone && zone.tl_f_up_points) || []);
+        S.ceHi.setData(ceHi);
+        S.ceLo.setData(ceLo);
+        S.peHi.setData(peHi);
+        S.peLo.setData(peLo);
+        S.ceFill.setData(midFill(
+          (zone && zone.ce_ch_hi_points) || (zone && zone.tl_w_dn_points),
+          (zone && zone.ce_ch_lo_points) || (zone && zone.tl_up_points),
+        ));
+        S.peFill.setData(midFill(
+          (zone && zone.pe_ch_hi_points) || (zone && zone.tl_down_points),
+          (zone && zone.pe_ch_lo_points) || (zone && zone.tl_f_up_points),
+        ));
+        S.tlUp.setData(mapPts((zone && zone.tl_up_points) || []));
+        S.tlWDn.setData(mapPts((zone && zone.tl_w_dn_points) || []));
+        S.tlDown.setData(mapPts((zone && zone.tl_down_points) || []));
+        S.tlFUp.setData(mapPts((zone && zone.tl_f_up_points) || []));
+        if (nw) {
+          if (nwConvSlLine) { try { S.ce.removePriceLine(nwConvSlLine); } catch (_) {} nwConvSlLine = null; }
+          if (nwMergeBandHiLine) { try { S.ce.removePriceLine(nwMergeBandHiLine); } catch (_) {} nwMergeBandHiLine = null; }
+          if (nwMergeBandLoLine) { try { S.ce.removePriceLine(nwMergeBandLoLine); } catch (_) {} nwMergeBandLoLine = null; }
+        } else {
+          if (convSlLine) { try { S.ce.removePriceLine(convSlLine); } catch (_) {} convSlLine = null; }
+          if (mergeBandHiLine) { try { S.ce.removePriceLine(mergeBandHiLine); } catch (_) {} mergeBandHiLine = null; }
+          if (mergeBandLoLine) { try { S.ce.removePriceLine(mergeBandLoLine); } catch (_) {} mergeBandLoLine = null; }
+        }
+        if (zone && zone.merge_band_high != null && zone.merge_band_low != null) {
+          const hi = S.ce.createPriceLine({
+            price: Number(zone.merge_band_high), color: CONV_YELLOW, lineWidth: 2,
+            lineStyle: LightweightCharts.LineStyle.SparseDotted, axisLabelVisible: false, title: "conv hi",
+          });
+          const lo = S.ce.createPriceLine({
+            price: Number(zone.merge_band_low), color: CONV_YELLOW, lineWidth: 2,
+            lineStyle: LightweightCharts.LineStyle.SparseDotted, axisLabelVisible: false, title: "conv lo",
+          });
+          if (nw) { nwMergeBandHiLine = hi; nwMergeBandLoLine = lo; }
+          else { mergeBandHiLine = hi; mergeBandLoLine = lo; }
+        } else if (zone && zone.conv_mid != null) {
+          const mid = S.ce.createPriceLine({
+            price: Number(zone.conv_mid), color: CONV_YELLOW, lineWidth: 2,
+            lineStyle: LightweightCharts.LineStyle.SparseDotted, axisLabelVisible: true, title: "conv",
+          });
+          if (nw) nwConvSlLine = mid; else convSlLine = mid;
+        }
+      } catch (err) { console.warn("tl chart", err); }
+    }
+
+    function updatePeAxisLabel(st, peLtp, opts) {
+      const nw = !!(opts && opts.nw);
+      const tag = document.getElementById(nw ? "peLiveTagNw" : "peLiveTag");
+      const peSeries = nw ? nwConvPeSeries : convPeSeries;
+      const algoId = nw ? "algo2nw" : "algo2";
+      if (nw) {
+        if (nwPePnlLine) { try { peSeries.removePriceLine(nwPePnlLine); } catch (_) {} nwPePnlLine = null; }
+      } else if (pePnlLine) {
+        try { peSeries.removePriceLine(pePnlLine); } catch (_) {}
+        pePnlLine = null;
+      }
+      if (!tag) return;
+      if (peLtp == null || !Number.isFinite(Number(peLtp))) {
+        tag.style.display = "none";
+        return;
+      }
+      const px = Number(peLtp);
+      let pnl = null;
+      const rows = st.open_trades || st.day_trades || [];
+      for (const t of rows) {
+        if (t.algo !== algoId || t.status !== "OPEN") continue;
+        const isPe = t.side === "PE" || String(t.symbol || "").endsWith("PE");
+        if (!isPe) continue;
+        if (t.live_pnl_rupees != null) pnl = Number(t.live_pnl_rupees);
+        else if (t.entry_price != null && t.qty != null) {
+          pnl = (px - Number(t.entry_price)) * Number(t.qty);
+        }
+        break;
+      }
+      if (pnl == null || !Number.isFinite(pnl)) {
+        tag.style.display = "none";
+        return;
+      }
+      const sign = pnl >= 0 ? "+" : "";
+      tag.textContent = `${px.toFixed(1)}/${sign}${Math.round(pnl)}`;
+      tag.classList.toggle("down", pnl < 0);
+      let y = null;
+      try { y = peSeries.priceToCoordinate(px); } catch (_) { y = null; }
+      if (y == null || !Number.isFinite(y)) {
+        tag.style.display = "none";
+        return;
+      }
+      tag.style.display = "block";
+      tag.style.top = `${Math.round(y)}px`;
+    }
+    function setConvZonePipe(zone, livePts, opts) {
+      const nw = !!(opts && opts.nw);
+      const ceSeries = nw ? nwConvCeSeries : convCeSeries;
+      const pipeHi = nw ? nwPipeHighSeries : pipeHighSeries;
+      const pipeMid = nw ? nwPipeMidSeries : pipeMidSeries;
+      const pipeLo = nw ? nwPipeLowSeries : pipeLowSeries;
+      let zoneLines = nw ? nwConvZoneLines : convZoneLines;
+      for (const line of zoneLines) {
+        try { ceSeries.removePriceLine(line); } catch (_) {}
+      }
+      zoneLines = [];
+      if (nw) nwConvZoneLines = zoneLines; else convZoneLines = zoneLines;
+      let pts = (zone && zone.pipe_points) || [];
+      if (nw) {
+        if (pts.length >= 2) nwFrozenPipePts = pts;
+        else if (nwFrozenPipePts && nwFrozenPipePts.length >= 2) pts = nwFrozenPipePts;
+        else {
+          const local = fitPipeFromSeries(livePts || [], 15);
+          if (local && local.length >= 2) { pts = local; nwFrozenPipePts = local; }
+        }
+      } else {
+        if (pts.length >= 2) frozenPipePts = pts;
+        else if (frozenPipePts && frozenPipePts.length >= 2) pts = frozenPipePts;
+        else {
+          const local = fitPipeFromSeries(livePts || [], 15);
+          if (local && local.length >= 2) { pts = local; frozenPipePts = local; }
+        }
+      }
+      if (pts.length >= 2) {
+        try {
+          pipeHi.setData(pts.map((p) => ({ time: p.time, value: p.high })));
+          pipeMid.setData(pts.map((p) => ({ time: p.time, value: p.mid })));
+          pipeLo.setData(pts.map((p) => ({ time: p.time, value: p.low })));
+        } catch (err) { console.warn("pipe chart", err); }
+        setConvTrendlines(zone, opts);
+        return;
+      }
+      try {
+        pipeHi.setData([]);
+        pipeMid.setData([]);
+        pipeLo.setData([]);
+      } catch (_) {}
+      setConvTrendlines(zone, opts);
+      if (!zone) return;
+      const add = (price, title, style) => {
+        const p = Number(price);
+        if (!Number.isFinite(p)) return;
+        zoneLines.push(ceSeries.createPriceLine({
+          price: p, color: "#f0b429", lineWidth: 1, lineStyle: style,
+          axisLabelVisible: false, title,
+        }));
+      };
+      add(zone.low, "merge", LightweightCharts.LineStyle.SparseDotted);
+      add(zone.high, "", LightweightCharts.LineStyle.SparseDotted);
+      add(zone.mid, "mid", LightweightCharts.LineStyle.SparseDotted);
+    }
+
+    function renderConvergence(st) {
+      const a2 = st.algo2 || {};
+      setPairExitTargets(st, a2);
+      if (a2.index_overlay) {
+        setIndexOverlay(a2.index_overlay);
+        const ov = a2.index_overlay;
+        const ixEl = document.getElementById("idxmsg");
+        if (ixEl && ov.bias) {
+          const hold = a2.index_trend_hold
+            ? ` · HOLD ${a2.index_hold_side || ""}`
+            : "";
+          ixEl.textContent =
+            `Index ch ${ov.ch_lo ?? "—"}–${ov.ch_hi ?? "—"} · ${ov.bias}${hold}`;
+        }
+      }
+      const scan = st.scan || {};
+      const pair = scan.pair || null;
+      const ce = a2.ce || (pair && pair.ce ? { symbol: pair.ce.tradingsymbol, ltp: pair.ce.ltp } : null);
+      const pe = a2.pe || (pair && pair.pe ? { symbol: pair.pe.tradingsymbol, ltp: pair.pe.ltp } : null);
+      const band = scan.band || {};
+      const rhythm = a2.rhythm || {};
+      const on = !!st.config?.algo2_enabled;
+      const bits = [];
+      const gate = scan.merge_gate || {};
+      const ceK = pair?.ce_strike ?? pair?.strike;
+      const peK = pair?.pe_strike ?? pair?.strike;
+      if (ceK != null || peK != null) {
+        bits.push(`<span class="strike">CE${ceK ?? "—"}/PE${peK ?? "—"}</span>`);
+      }
+      if (pair && pair.expiry) bits.push(`<span class="expiry">${String(pair.expiry).slice(0, 10)}</span>`);
+      if (ce) bits.push(`<span class="ce">CE ${ce.ltp != null ? Number(ce.ltp).toFixed(1) : "—"}</span>`);
+      if (pe) bits.push(`<span class="pe">PE ${pe.ltp != null ? Number(pe.ltp).toFixed(1) : "—"}</span>`);
+      if (pair) bits.push(`<span class="track">gap ${pair.gap ?? "—"} · mid ${pair.mid ?? "—"}</span>`);
+      if (gate.enabled !== false) {
+        const gOk = !!gate.ok;
+        bits.push(
+          `<span class="track" style="color:${gOk ? "#26a69a" : "#f0b429"}">` +
+          `${gOk ? "GATE OK" : "GATE WAIT"}` +
+          `${gate.atm_gap != null ? ` atmΔ${gate.atm_gap}` : ""}` +
+          `${gate.reason ? ` · ${String(gate.reason).slice(0, 42)}` : ""}</span>`
+        );
+      }
+      const lean = a2.lean_signal || {};
+      const leanSide = a2.lean_side || lean.side;
+      const candle = lean.candle || {};
+      if (candle.color) {
+        bits.push(
+          `<span class="track" style="color:${candle.color === "green" ? "#26a69a" : (candle.color === "red" ? "#ef5350" : "#888")}">` +
+          `1m ${candle.color}${candle.side ? `→${candle.side}` : ""}</span>`
+        );
+      }
+      if (leanSide) {
+        bits.push(
+          `<span class="track" style="color:#26a69a">LEAN ${leanSide}` +
+          `${lean.path ? ` · ${lean.path}` : ""}` +
+          `${lean.persist_n != null ? ` p${lean.persist_n}` : ""}</span>`
+        );
+      } else if (lean.reason && lean.reason !== "warming" && lean.reason !== "lean disabled") {
+        bits.push(
+          `<span class="track" style="color:#888">lean · ${String(lean.reason).slice(0, 36)}</span>`
+        );
+      }
+      const pipe = (a2.convergence_zone || {}).pipe || {};
+      if (pipe.tilt) {
+        bits.push(
+          `<span class="track" style="color:#f0b429">PIPE ${pipe.tilt}` +
+          `${pipe.slope != null ? ` · slope ${Number(pipe.slope).toFixed(3)}` : ""}` +
+          `${pipe.half_width != null ? ` · ±${pipe.half_width}` : ""}</span>`
+        );
+      }
+      bits.push(
+        `<span class="track">${scan.tracked_pairs ?? 0} pairs · band ${band.low ?? 125}–${band.high ?? 145}` +
+        `${scan.locked_merge ? " · LOCKED" : ""}` +
+        `${rhythm.quiet_streak ? ` · ${rhythm.quiet_streak} quiet` : ""}</span>`
+      );
+      document.getElementById("convPair").innerHTML = bits.join(" ");
+      const sw = scan.switch_reason || "";
+      document.getElementById("convmsg").textContent =
+        `${on ? "ON" : "OFF"} · ${a2.phase || "—"}` +
+        `${a2.message ? " · " + a2.message : ""}` +
+        `${sw ? " · " + sw.slice(0, 90) : ""}`;
+
+      const rows = (scan.pairs || []).slice(0, 6).map((p) => {
+        const cls = p.id === scan.active_id ? "tag active" : (p.converged ? "tag conv" : "tag");
+        const ceL = p.ce?.ltp;
+        const peL = p.pe?.ltp;
+        const ceTxt = ceL != null ? Number(ceL).toFixed(0) : "—";
+        const peTxt = peL != null ? Number(peL).toFixed(0) : "—";
+        return `<span class="${cls}" title="merge score ${p.merge_score ?? "—"} · gap ${p.gap ?? "—"}">` +
+          `K${p.strike ?? "x"} ${ceTxt}/${peTxt} · m${p.merge_score ?? "—"}${p.converged ? " ✓" : ""}</span>`;
+      });
+      document.getElementById("convPairs").innerHTML =
+        rows.join("") || `<span class="meta">no in-band CE/PE pairs yet</span>`;
+
+      const pts = a2.live_series || [];
+      const emptyEl = document.getElementById("convEmpty");
+      if (emptyEl) emptyEl.style.display = pts.length ? "none" : "flex";
+      if (pts.length) {
+        convHadData = true;
+        const ceData = pts.map((p) => ({ time: p.time, value: p.ce }));
+        const peData = pts.map((p) => ({ time: p.time, value: p.pe }));
+        applyDataKeepView(
+          cC,
+          "conv",
+          () => {
+            try {
+              convCeSeries.setData(ceData);
+              convPeSeries.setData(peData);
+            } catch (err) { console.warn("conv chart", err); }
+          },
+          `conv-${scan.active_id || "none"}`,
+          ceData.map((p) => p.time),
+        );
+        const peLtpNow = peData.length ? peData[peData.length - 1].value
+          : (pe && pe.ltp != null ? Number(pe.ltp) : null);
+        updatePeAxisLabel(st, peLtpNow);
+        setConvZonePipe(a2.convergence_zone, pts);
+      } else if (convHadData) {
+        convHadData = false;
+        frozenPipePts = null;
+        try {
+          convCeSeries.setData([]);
+          convPeSeries.setData([]);
+          pipeHighSeries.setData([]);
+          pipeMidSeries.setData([]);
+          pipeLowSeries.setData([]);
+          tlUpSeries.setData([]);
+          tlDownSeries.setData([]);
+        } catch (_) {}
+      } else {
+        setConvZonePipe(a2.convergence_zone, pts);
+      }
+    }
+    let convHadData = false;
+
+    function renderConvergenceNw(st) {
+      const a2 = st.algo2nw || {};
+      const nwOpts = { nw: true, ceSeries: nwConvCeSeries, peSeries: nwConvPeSeries, exitMult: st.config?.algo2nw_pair_exit_mult };
+      setPairExitTargets(st, a2, nwOpts);
+      const scan = st.scan_nw || {};
+      const pair = scan.pair || null;
+      const ce = a2.ce || (pair && pair.ce ? { symbol: pair.ce.tradingsymbol, ltp: pair.ce.ltp } : null);
+      const pe = a2.pe || (pair && pair.pe ? { symbol: pair.pe.tradingsymbol, ltp: pair.pe.ltp } : null);
+      const band = scan.band || a2.screen_band || {};
+      const on = !!st.config?.algo2nw_enabled;
+      const bits = [];
+      const ceK = pair?.ce_strike ?? pair?.strike ?? a2.ce?.strike;
+      const peK = pair?.pe_strike ?? pair?.strike ?? a2.pe?.strike;
+      if (ceK != null || peK != null) {
+        bits.push(`<span class="strike">CE${ceK ?? "—"}/PE${peK ?? "—"}</span>`);
+      }
+      if (pair && pair.expiry) bits.push(`<span class="expiry">${String(pair.expiry).slice(0, 10)}</span>`);
+      else if (scan.expiry) bits.push(`<span class="expiry">${String(scan.expiry).slice(0, 10)}</span>`);
+      if (ce) bits.push(`<span class="ce">CE ${ce.ltp != null ? Number(ce.ltp).toFixed(1) : "—"}</span>`);
+      if (pe) bits.push(`<span class="pe">PE ${pe.ltp != null ? Number(pe.ltp).toFixed(1) : "—"}</span>`);
+      if (pair) bits.push(`<span class="track">gap ${pair.gap ?? "—"} · mid ${pair.mid ?? "—"}</span>`);
+      bits.push(
+        `<span class="track">NW band ${band.low ?? 46}–${band.high ?? 54}` +
+        ` · exit ${Number(st.config?.algo2nw_pair_exit_mult || 1.7).toFixed(2)}×` +
+        ` · max 1 setup</span>`
+      );
+      if (scan.error) bits.push(`<span class="track" style="color:#ef5350">${String(scan.error).slice(0, 48)}</span>`);
+      document.getElementById("convnwPair").innerHTML = bits.join(" ");
+      document.getElementById("convnwmsg").textContent =
+        `${on ? "ON" : "OFF"} · ${a2.phase || "—"}` +
+        `${a2.message ? " · " + a2.message : ""}`;
+      const cands = (scan.candidates || []).slice(0, 8);
+      document.getElementById("convnwPairs").innerHTML =
+        cands.map((c) => {
+          const typ = c.instrument_type || "?";
+          return `<span class="tag">K${c.strike ?? "x"} ${typ} ${c.ltp != null ? Number(c.ltp).toFixed(0) : "—"}</span>`;
+        }).join("") || `<span class="meta">no next-week in-band legs yet</span>`;
+
+      const pts = a2.live_series || [];
+      const emptyEl = document.getElementById("convnwEmpty");
+      if (emptyEl) emptyEl.style.display = pts.length ? "none" : "flex";
+      if (pts.length) {
+        nwConvHadData = true;
+        const ceData = pts.map((p) => ({ time: p.time, value: p.ce }));
+        const peData = pts.map((p) => ({ time: p.time, value: p.pe }));
+        applyDataKeepView(
+          cCnw,
+          "convnw",
+          () => {
+            try {
+              nwConvCeSeries.setData(ceData);
+              nwConvPeSeries.setData(peData);
+            } catch (err) { console.warn("convnw chart", err); }
+          },
+          `convnw-${pair?.id || a2.ce_symbol || "none"}`,
+          ceData.map((p) => p.time),
+        );
+        const peLtpNow = peData.length ? peData[peData.length - 1].value
+          : (pe && pe.ltp != null ? Number(pe.ltp) : null);
+        updatePeAxisLabel(st, peLtpNow, { nw: true });
+        setConvZonePipe(a2.convergence_zone || a2.convergence_band, pts, { nw: true });
+      } else if (nwConvHadData) {
+        nwConvHadData = false;
+        nwFrozenPipePts = null;
+        try {
+          nwConvCeSeries.setData([]);
+          nwConvPeSeries.setData([]);
+          nwPipeHighSeries.setData([]);
+          nwPipeMidSeries.setData([]);
+          nwPipeLowSeries.setData([]);
+          nwTlUpSeries.setData([]);
+          nwTlDownSeries.setData([]);
+        } catch (_) {}
+      } else {
+        setConvZonePipe(a2.convergence_zone || a2.convergence_band, pts, { nw: true });
+      }
+    }
 
     let lastNotified = null;
-    let lastAlogFp = "";
+    let lastAlogFpCw = "";
+    let lastAlogFpNw = "";
+    let lastCritFp = "";
     let niftyLoaded = false;
 
-    function renderAlgoLog(st) {
-      const box = document.getElementById("algoLog");
-      const meta = document.getElementById("alogMeta");
-      if (!box) return;
-      const rows = st.activity_log || [];
-      const a1 = (st.activity || {}).algo1 || {};
-      if (meta) {
-        meta.textContent = st.config?.algo1_enabled
-          ? `${a1.state || "—"} · ${(a1.message || st.algo1?.message || "").slice(0, 80)}`
-          : "Algo1 disabled in Settings";
+    function renderCriteriaLive(st) {
+      const el = document.getElementById("criteriaMarquee");
+      if (!el) return;
+      const rows = (st.activity_log || []).filter((r) => r.level === "criteria");
+      let msg = "";
+      if (rows.length) {
+        msg = String(rows[rows.length - 1].message || "");
+      } else {
+        const db = st.dual_book || {};
+        const scores = db.scores || {};
+        const bits = [];
+        for (const uid of ["NIFTY", "SENSEX"]) {
+          const d = scores[uid];
+          if (!d) continue;
+          bits.push(
+            `${uid} ${d.allow ? "MATCH" : "WAIT"} ${d.side || "-"} ` +
+            `${Math.round(Number(d.score || 0) * 100)}% · ${(d.reason || d.event || "").slice(0, 40)}`
+          );
+        }
+        if (db.message) bits.push(String(db.message).slice(0, 70));
+        const a1 = (st.activity || {}).algo1 || st.algo1 || {};
+        if (!bits.length && (a1.message || a1.phase)) {
+          bits.push(`${a1.phase || "—"} · ${String(a1.message || "").slice(0, 80)}`);
+        }
+        msg = bits.join(" · ");
       }
-      const last = rows.length ? rows[rows.length - 1] : null;
-      const fp = last ? `${rows.length}|${last.ts}|${last.message}` : "0";
-      if (fp === lastAlogFp) return;
-      lastAlogFp = fp;
+      if (!msg) msg = "scanning — waiting for criteria…";
+      const fp = msg;
+      if (fp === lastCritFp) return;
+      lastCritFp = fp;
+      // 1-line banner: latest status duplicated so the marquee never looks empty
+      const safe = escapeHtml(msg);
+      el.innerHTML =
+        `<b>NOW</b> ${safe}<span class="sep">◆</span>` +
+        `${safe}<span class="sep">◆</span>`;
+      // Restart animation so a fresh update is visible immediately
+      el.style.animation = "none";
+      void el.offsetWidth;
+      el.style.animation = "";
+    }
+
+    function paintAlgoLogBox(box, rows, emptyMsg) {
+      if (!box) return;
       if (!rows.length) {
-        box.innerHTML = `<div class="empty">Engine connected — waiting for status changes…</div>`;
+        box.innerHTML = `<div class="empty">${emptyMsg}</div>`;
         return;
       }
       const slice = rows.slice(-80).reverse();
@@ -689,7 +1695,48 @@
         const lvl = String(r.level || "info");
         return `<div class="row"><span class="ts">${t}</span><span class="lvl ${lvl}">${lvl}</span><span class="msg">${escapeHtml(r.message || "")}</span></div>`;
       }).join("");
-      box.scrollTop = 0; // newest first
+      box.scrollTop = 0;
+    }
+
+    function renderAlgoLog(st) {
+      const a2 = (st.activity || {}).algo2 || st.algo2 || {};
+      const a2nw = (st.activity || {}).algo2nw || st.algo2nw || {};
+      const metaCw = document.getElementById("alogMetaCw");
+      const metaNw = document.getElementById("alogMetaNw");
+      if (metaCw) {
+        metaCw.textContent =
+          `${st.config?.algo2_enabled ? "ON" : "OFF"} · ${a2.phase || a2.state || "—"}` +
+          `${a2.message ? " · " + String(a2.message).slice(0, 36) : ""}`;
+      }
+      if (metaNw) {
+        metaNw.textContent =
+          `${st.config?.algo2nw_enabled !== false ? "ON" : "OFF"} · ${a2nw.phase || a2nw.state || "—"}` +
+          `${a2nw.message ? " · " + String(a2nw.message).slice(0, 36) : ""}`;
+      }
+      const cwRows = st.activity_log_cw
+        || (st.activity_log || []).filter((r) => (r.algo || "algo2") !== "algo2nw");
+      const nwRows = st.activity_log_nw
+        || (st.activity_log || []).filter((r) => r.algo === "algo2nw");
+      const lastCw = cwRows.length ? cwRows[cwRows.length - 1] : null;
+      const fpCw = lastCw ? `${cwRows.length}|${lastCw.ts}|${lastCw.message}` : "0";
+      if (fpCw !== lastAlogFpCw) {
+        lastAlogFpCw = fpCw;
+        paintAlgoLogBox(
+          document.getElementById("algoLogCw"),
+          cwRows,
+          "Waiting for current-week status…",
+        );
+      }
+      const lastNw = nwRows.length ? nwRows[nwRows.length - 1] : null;
+      const fpNw = lastNw ? `${nwRows.length}|${lastNw.ts}|${lastNw.message}` : "0";
+      if (fpNw !== lastAlogFpNw) {
+        lastAlogFpNw = fpNw;
+        paintAlgoLogBox(
+          document.getElementById("algoLogNw"),
+          nwRows,
+          "Waiting for next-week status…",
+        );
+      }
     }
     function escapeHtml(s) {
       return String(s)
@@ -802,254 +1849,6 @@
       return out;
     }
 
-    function cleanSeries(rows) {
-      return dedupeByTime(rows).filter(
-        (r) => Number.isFinite(Number(r.time)) && Number.isFinite(Number(r.value))
-      );
-    }
-
-    function isoToUnix(iso) {
-      if (!iso) return null;
-      const ms = Date.parse(iso);
-      if (!Number.isFinite(ms)) return null;
-      return Math.floor(ms / 1000);
-    }
-
-    function nextOrderColor() {
-      const c = ORDER_COLORS[orderColorIdx % ORDER_COLORS.length];
-      orderColorIdx += 1;
-      return c;
-    }
-
-    function buildOrderPoints(trade, rawPoints) {
-      const entryT = isoToUnix(trade.opened_at);
-      const entryP = Number(trade.entry_price);
-      let pts = cleanSeries(rawPoints || []);
-      if (entryT != null) {
-        pts = pts.filter((p) => p.time >= entryT);
-        if (Number.isFinite(entryP)) {
-          if (!pts.length || pts[0].time > entryT) {
-            pts = [{ time: entryT, value: entryP }, ...pts];
-          } else if (pts[0].time === entryT) {
-            pts[0] = { time: entryT, value: entryP };
-          }
-        }
-      }
-      if (trade.status === "CLOSED" && trade.exit_price != null && trade.closed_at) {
-        const exitT = isoToUnix(trade.closed_at);
-        const exitP = Number(trade.exit_price);
-        if (exitT != null && Number.isFinite(exitP)) {
-          pts = pts.filter((p) => p.time <= exitT);
-          if (!pts.length || pts[pts.length - 1].time < exitT) {
-            pts.push({ time: exitT, value: exitP });
-          } else {
-            pts[pts.length - 1] = { time: exitT, value: exitP };
-          }
-        }
-      }
-      return dedupeByTime(pts);
-    }
-
-    function orderMarkers(trade, pts) {
-      const markers = [];
-      if (!pts.length) return markers;
-      const entryT = isoToUnix(trade.opened_at);
-      const buyT = entryT != null && pts.some((p) => p.time === entryT)
-        ? entryT
-        : pts[0].time;
-      markers.push({
-        time: buyT,
-        position: "belowBar",
-        color: "#26a69a",
-        shape: "arrowUp",
-        text: "BUY",
-      });
-      if (trade.status === "CLOSED" && trade.closed_at) {
-        const exitT = isoToUnix(trade.closed_at);
-        const sellT = exitT != null && pts.some((p) => p.time === exitT)
-          ? exitT
-          : pts[pts.length - 1].time;
-        markers.push({
-          time: sellT,
-          position: "aboveBar",
-          color: "#ef5350",
-          shape: "arrowDown",
-          text: "SELL",
-        });
-      }
-      return markers;
-    }
-
-    function removeOrderSlot(slot) {
-      if (!slot) return;
-      try {
-        if (slot.priceLine) slot.series.removePriceLine(slot.priceLine);
-      } catch (_) {}
-      try { c1.removeSeries(slot.series); } catch (_) {}
-    }
-
-    function ensureOrderSeries(id, color) {
-      let slot = orderSeriesMap.get(id);
-      if (slot) return slot;
-      const series = c1.addLineSeries({ ...orderLineOpts, color });
-      slot = { series, color, priceLine: null, symbol: "" };
-      orderSeriesMap.set(id, slot);
-      return slot;
-    }
-
-    function applyOrderSeriesData(slot, trade, points) {
-      slot.symbol = trade.symbol || slot.symbol || "";
-      try {
-        slot.series.setData(points);
-        slot.series.setMarkers(orderMarkers(trade, points));
-      } catch (err) {
-        console.warn("order LTP series", err);
-      }
-      const entryP = Number(trade.entry_price);
-      try {
-        if (slot.priceLine) {
-          slot.series.removePriceLine(slot.priceLine);
-          slot.priceLine = null;
-        }
-        if (Number.isFinite(entryP)) {
-          slot.priceLine = slot.series.createPriceLine({
-            price: entryP,
-            color: slot.color,
-            lineWidth: 1,
-            lineStyle: LS.Dashed,
-            axisLabelVisible: true,
-            title: "BUY",
-          });
-        }
-      } catch (_) {}
-    }
-
-    function fmtInr(v) {
-      const n = Number(v || 0);
-      const sign = n > 0 ? "+" : "";
-      return "₹" + sign + n.toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-    }
-
-    function formatOrderLegend(rows) {
-      if (!rows.length) {
-        return `<span class="meta">No open orders — LTP lines appear on entry</span>`;
-      }
-      return rows.map((r) => {
-        const pnl = Number(r.live_pnl_rupees ?? 0);
-        const cls = pnl > 0 ? "up" : pnl < 0 ? "down" : "";
-        const ltp = r.live_price != null ? Number(r.live_price).toFixed(1) : "—";
-        const fading = r._fading ? " · SOLD" : "";
-        return `<span class="tag" style="border-color:${r._color};color:${r._color}" title="${r.symbol}">`
-          + `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${r._color};margin-right:4px"></span>`
-          + `${r.side || ""} ${r.symbol || "—"} @ ${ltp}`
-          + ` <span class="${cls}">${fmtInr(pnl)}</span>${fading}</span>`;
-      }).join("");
-    }
-
-    function syncLiveOrderChart(st) {
-      const now = Date.now();
-      const orderRows = Array.isArray(st.order_ltp) ? st.order_ltp : [];
-      const opens = orderRows.length
-        ? orderRows
-        : (st.open_trades || []).map((t) => ({
-            ...t,
-            series: (st.series && t.symbol) ? (st.series[t.symbol] || []) : [],
-          }));
-      const openIds = new Set(opens.map((t) => String(t.id)));
-      const dayBook = st.day_trades || [];
-
-      // Detect newly closed opens → brief SELL flash then drop line
-      for (const [id, slot] of [...orderSeriesMap.entries()]) {
-        if (openIds.has(id) || fadingClosed.has(id)) continue;
-        const closed = dayBook.find((t) => String(t.id) === id && t.status === "CLOSED");
-        const cached = lastOrderPoints.get(id) || [];
-        const trade = closed
-          ? { ...closed, status: "CLOSED" }
-          : {
-              id,
-              symbol: slot.symbol,
-              status: "CLOSED",
-              entry_price: null,
-              opened_at: null,
-              exit_price: cached.length ? cached[cached.length - 1].value : null,
-              closed_at: new Date().toISOString(),
-            };
-        const points = buildOrderPoints(trade, cached);
-        fadingClosed.set(id, {
-          until: now + 12000,
-          color: slot.color,
-          series: slot.series,
-          priceLine: slot.priceLine,
-          trade,
-          points,
-        });
-        orderSeriesMap.delete(id);
-        try {
-          slot.series.setData(points);
-          slot.series.setMarkers(orderMarkers(trade, points));
-        } catch (_) {}
-      }
-
-      // Expire faded closed lines
-      for (const [id, fade] of [...fadingClosed.entries()]) {
-        if (now < fade.until) continue;
-        removeOrderSlot(fade);
-        fadingClosed.delete(id);
-        lastOrderPoints.delete(id);
-      }
-
-      const legendRows = [];
-      const allTimes = [];
-
-      for (const t of opens) {
-        const id = String(t.id);
-        if (!id) continue;
-        let slot = orderSeriesMap.get(id);
-        if (!slot) slot = ensureOrderSeries(id, nextOrderColor());
-        const points = buildOrderPoints(t, t.series || []);
-        lastOrderPoints.set(id, points);
-        applyOrderSeriesData(slot, { ...t, status: "OPEN" }, points);
-        points.forEach((p) => allTimes.push(p.time));
-        legendRows.push({ ...t, _color: slot.color, _fading: false });
-      }
-
-      for (const [id, fade] of fadingClosed.entries()) {
-        try {
-          fade.series.setData(fade.points);
-          fade.series.setMarkers(orderMarkers(fade.trade, fade.points));
-        } catch (_) {}
-        fade.points.forEach((p) => allTimes.push(p.time));
-        legendRows.push({
-          id,
-          symbol: fade.trade.symbol,
-          side: fade.trade.side,
-          live_price: fade.trade.exit_price,
-          live_pnl_rupees: fade.trade.net_pnl_rupees ?? fade.trade.pnl_rupees,
-          _color: fade.color,
-          _fading: true,
-        });
-      }
-
-      const pairKey = [
-        ...[...openIds].sort(),
-        ...[...fadingClosed.keys()].sort().map((x) => `f:${x}`),
-      ].join("|") || "none";
-
-      applyDataKeepView(c1, "a1", () => {}, pairKey, allTimes);
-
-      const nOpen = opens.length;
-      document.getElementById("a1msg").textContent = nOpen
-        ? `${nOpen} open · LTP live`
-        : (fadingClosed.size ? "Sold — clearing line…" : "No open orders");
-      document.getElementById("a1pair").innerHTML = nOpen
-        ? `<span class="meta">${nOpen} live order line${nOpen > 1 ? "s" : ""} · ▲ BUY entry · ▼ SELL exit (then line drops)</span>`
-        : `<span class="meta">Waiting for entry — chart shows LTP only while orders are open</span>`;
-      document.getElementById("a1pairs").innerHTML = formatOrderLegend(legendRows);
-
-      const zoneEl = document.getElementById("convZoneLabel");
-      if (zoneEl) zoneEl.remove();
-    }
-
     const TRADE_COLS = [
       { key: "algo", label: "Algo" },
       { key: "mode", label: "Mode" },
@@ -1068,8 +1867,11 @@
     const tradeFilters = Object.fromEntries(TRADE_COLS.map((c) => [c.key, new Set()]));
     let tradeFilterCol = null;
     let tradeRowsCache = [];
+    let tradeRowsCacheNw = [];
     let tradesHeadBuilt = false;
+    let tradesNwHeadBuilt = false;
     const selectedTradeIds = new Set();
+    const selectedTradeIdsNw = new Set();
     let squareOffBusy = false;
     let entriesModeFilter = "all"; // all | paper | live
 
@@ -1084,6 +1886,15 @@
       } catch (_) {
         return String(iso).slice(0, 19);
       }
+    }
+
+    function algoDisplayName(algo) {
+      const a = String(algo || "");
+      if (a === "algo2") return "Algo1 CW";
+      if (a === "algo2nw") return "Algo2 NW";
+      if (a === "algo1") return "Algo1 FT";
+      if (a === "algo1_sx") return "Sensex";
+      return a || "—";
     }
 
     function normalizeTradeRow(t) {
@@ -1107,7 +1918,8 @@
         ? (t.broker_confirmed ? "LIVE ✓" : "LIVE")
         : (t.live_attempted ? "PAPER*" : "PAPER");
       return {
-        algo: String(t.algo || ""),
+        algo: algoDisplayName(t.algo),
+        algoRaw: String(t.algo || ""),
         mode: modeLabel,
         modeRaw,
         side: String(t.side || ""),
@@ -1169,15 +1981,25 @@
         if (!openIds.has(id)) selectedTradeIds.delete(id);
       });
       const n = selectedTradeIds.size;
-      document.getElementById("tradeSelMeta").textContent =
-        n ? `${n} open selected` : "0 selected";
-      document.getElementById("btnSquareSelected").disabled = n === 0 || squareOffBusy;
+      const meta = document.getElementById("tradeSelMeta");
+      if (meta) meta.textContent = n ? `${n} open selected` : "0 selected";
+      const btn = document.getElementById("btnSquareSelected");
+      if (btn) btn.disabled = n === 0 || squareOffBusy;
       const head = document.getElementById("chkSelAllOpen");
       if (head) {
         const visibleOpen = tradeRowsCache.filter(tradeRowMatches).filter((r) => r.isOpen);
         head.checked = visibleOpen.length > 0 && visibleOpen.every((r) => selectedTradeIds.has(r.id));
         head.indeterminate = !head.checked && visibleOpen.some((r) => selectedTradeIds.has(r.id));
       }
+      const openNw = new Set(tradeRowsCacheNw.filter((r) => r.isOpen).map((r) => r.id));
+      [...selectedTradeIdsNw].forEach((id) => {
+        if (!openNw.has(id)) selectedTradeIdsNw.delete(id);
+      });
+      const nNw = selectedTradeIdsNw.size;
+      const metaNw = document.getElementById("tradeSelMetaNw");
+      if (metaNw) metaNw.textContent = nNw ? `${nNw} open selected` : "0 selected";
+      const btnNw = document.getElementById("btnSquareSelectedNw");
+      if (btnNw) btnNw.disabled = nNw === 0 || squareOffBusy;
     }
 
     async function doSquareOff({ ids = null, allOpen = false }) {
@@ -1362,17 +2184,18 @@
       tradeFilterCol = null;
     });
 
-    function paintTradesBody() {
-      const wrap = document.getElementById("tradesTableWrap");
+    function paintOneTradesBody(bodyId, wrapId, cache, selectedSet) {
+      const wrap = document.getElementById(wrapId);
       const scrollTop = wrap ? wrap.scrollTop : 0;
       const scrollLeft = wrap ? wrap.scrollLeft : 0;
-      const body = document.getElementById("tradesBody");
-      const list = tradeRowsCache.filter(tradeRowMatches);
+      const body = document.getElementById(bodyId);
+      if (!body) return;
+      const list = cache.filter(tradeRowMatches);
       const colSpan = TRADE_COLS.length + 1;
       body.innerHTML = list.map((r) => {
         const cls = r.livePnlNum >= 0 ? "up" : "down";
         const rowCls = r.isOpen ? "row-open" : "row-closed";
-        const checked = selectedTradeIds.has(r.id) ? "checked" : "";
+        const checked = selectedSet.has(r.id) ? "checked" : "";
         const selCell = r.isOpen
           ? `<td class="sel"><input type="checkbox" class="row-sel" data-id="${r.id}" ${checked} /></td>`
           : `<td class="sel"><input type="checkbox" class="row-sel" disabled title="Closed — cannot square-off" /></td>`;
@@ -1396,8 +2219,8 @@
       body.querySelectorAll("input.row-sel:not([disabled])").forEach((cb) => {
         cb.addEventListener("change", () => {
           const id = cb.dataset.id;
-          if (cb.checked) selectedTradeIds.add(id);
-          else selectedTradeIds.delete(id);
+          if (cb.checked) selectedSet.add(id);
+          else selectedSet.delete(id);
           syncTradeSelUi();
         });
       });
@@ -1405,35 +2228,71 @@
         wrap.scrollTop = scrollTop;
         wrap.scrollLeft = scrollLeft;
       }
+    }
+
+    function paintTradesBody() {
+      paintOneTradesBody("tradesBody", "tradesTableWrap", tradeRowsCache, selectedTradeIds);
+      paintOneTradesBody("tradesNwBody", "tradesNwTableWrap", tradeRowsCacheNw, selectedTradeIdsNw);
       syncTradeSelUi();
     }
 
-    function renderTrades(dayTrades, scan, historyTotal) {
-      if (scan) lastScanForTrades = scan;
-      buildTradesHead();
-      // Day book ONLY: OPEN + today's CLOSED. Prior days stay in Reports / trades.json.
+    function buildTradesNwHead() {
+      if (tradesNwHeadBuilt) return;
+      const tr = document.getElementById("tradesNwHeadRow");
+      if (!tr) return;
+      tr.innerHTML = `
+        <th class="sel"></th>
+      ` + TRADE_COLS.map((c) => `
+        <th data-col="${c.key}"><span class="th-inner"><span class="th-label">${c.label}</span></span></th>
+      `).join("");
+      tradesNwHeadBuilt = true;
+    }
+
+    function dayTradeBuckets(dayTrades) {
       const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
       const rows = (dayTrades || []).filter((t) => {
         if (t.status === "OPEN") return true;
         const day = String(t.closed_at || t.opened_at || "").slice(0, 10);
         return day === today;
       });
-      const opens = rows.filter((t) => t.status === "OPEN").map(normalizeTradeRow);
-      const closed = rows
-        .filter((t) => t.status === "CLOSED")
-        .slice()
-        .sort((a, b) => String(b.closed_at || "").localeCompare(String(a.closed_at || "")))
-        .map(normalizeTradeRow);
-      tradeRowsCache = [...opens, ...closed];
+      const toRows = (list) => {
+        const opens = list.filter((t) => t.status === "OPEN").map(normalizeTradeRow);
+        const closed = list
+          .filter((t) => t.status === "CLOSED")
+          .slice()
+          .sort((a, b) => String(b.closed_at || "").localeCompare(String(a.closed_at || "")))
+          .map(normalizeTradeRow);
+        return [...opens, ...closed];
+      };
+      const cw = rows.filter((t) => t.algo !== "algo2nw");
+      const nw = rows.filter((t) => t.algo === "algo2nw");
+      return { cw: toRows(cw), nw: toRows(nw) };
+    }
+
+    function renderTrades(dayTrades, scan, historyTotal) {
+      if (scan) lastScanForTrades = scan;
+      buildTradesHead();
+      buildTradesNwHead();
+      const buckets = dayTradeBuckets(dayTrades);
+      tradeRowsCache = buckets.cw;
+      tradeRowsCacheNw = buckets.nw;
       const meta = document.getElementById("entriesMeta");
       if (meta) {
         const nLive = tradeRowsCache.filter((r) => r.modeRaw === "live").length;
         const nPaper = tradeRowsCache.length - nLive;
         meta.innerHTML =
-          `today ${tradeRowsCache.length} ` +
+          `CW today ${tradeRowsCache.length} ` +
           `(<span class="badge paper">P ${nPaper}</span> ` +
-          `<span class="badge live">L ${nLive}</span>) · ` +
-          `full history in <a href="/reports?mode=live" target="_blank" rel="noopener">Live Reports</a> · select OPEN to square-off`;
+          `<span class="badge live">L ${nLive}</span>) · select OPEN to square-off`;
+      }
+      const metaNw = document.getElementById("entriesMetaNw");
+      if (metaNw) {
+        const nLive = tradeRowsCacheNw.filter((r) => r.modeRaw === "live").length;
+        const nPaper = tradeRowsCacheNw.length - nLive;
+        metaNw.innerHTML =
+          `NW today ${tradeRowsCacheNw.length} ` +
+          `(<span class="badge paper">P ${nPaper}</span> ` +
+          `<span class="badge live">L ${nLive}</span>) · select OPEN to square-off`;
       }
       paintTradesBody();
       updateFunnelActiveState();
@@ -1451,6 +2310,24 @@
         showToast("Complete Kite login in the new tab…");
       } catch (err) {
         showToast("Login error: " + err);
+      }
+    }
+
+    async function logoutKite() {
+      if (!confirm("Logout Kite session on this machine?\n\nAuto-login stays off until you click Login again (or restart the app).")) {
+        return;
+      }
+      try {
+        const r = await fetch("/api/auth/logout", { method: "POST" });
+        const j = await r.json();
+        if (j.error) {
+          showToast("Logout failed: " + j.error);
+          return;
+        }
+        applyAuth({ auth: j });
+        showToast("Logged out — click Login with Kite when ready");
+      } catch (err) {
+        showToast("Logout error: " + err);
       }
     }
 
@@ -1489,6 +2366,19 @@
         sess.textContent = ew.in_window ? `ENTRY ${win}` : `WAIT ${win}`;
         sess.className = ew.in_window ? "badge ok" : "badge";
       }
+      const idle = st.kite_idle || {};
+      const idleBadge = document.getElementById("kiteIdleBadge");
+      if (idleBadge) {
+        if (idle.active) {
+          idleBadge.textContent = `IDLE after ${idle.after || "15:40"} · REPORTS OK`;
+          idleBadge.className = "badge ok";
+          idleBadge.title = idle.message || "Engine stopped talking to Zerodha; Reports / local DB still work";
+        } else {
+          idleBadge.textContent = "ENGINE ACTIVE";
+          idleBadge.className = "badge";
+          idleBadge.title = "Live engine connected to Zerodha";
+        }
+      }
     }
 
     async function muteLinkAlert() {
@@ -1500,19 +2390,54 @@
       }
     }
 
+    function formatTokenCreated(iso) {
+      if (!iso) return null;
+      try {
+        const d = new Date(String(iso));
+        if (Number.isNaN(d.getTime())) return null;
+        const parts = new Intl.DateTimeFormat("en-GB", {
+          timeZone: "Asia/Kolkata",
+          day: "2-digit",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }).formatToParts(d);
+        const get = (t) => (parts.find((p) => p.type === t) || {}).value || "";
+        const day = get("day");
+        const mon = get("month");
+        const hh = get("hour");
+        const mm = get("minute");
+        if (!day || !hh) return null;
+        return `${day} ${mon} ${hh}:${mm}`;
+      } catch (_) {
+        return null;
+      }
+    }
+
     function applyAuth(st) {
       const auth = st.auth || {};
       const banner = document.getElementById("authBanner");
       const badge = document.getElementById("authBadge");
-      const need = !!auth.needs_login || auth.ok === false;
+      const logoutBtn = document.getElementById("logoutBtn");
+      const idleOn = !!(st.kite_idle && st.kite_idle.active);
+      const need = !idleOn && (!!auth.needs_login || auth.ok === false);
       if (badge) {
-        if (need) {
+        if (idleOn) {
+          badge.textContent = "AUTH IDLE";
+          badge.className = "badge ok";
+          badge.title = "After 15:40 — Zerodha not required; Reports still work";
+        } else if (need) {
           badge.textContent = "AUTH LOGIN";
           badge.className = "badge warn";
         } else {
           badge.textContent = auth.user_name ? `AUTH ${auth.user_name}` : "AUTH OK";
           badge.className = "badge ok";
         }
+      }
+      if (logoutBtn) {
+        logoutBtn.style.display = need || idleOn ? "none" : "";
+        logoutBtn.disabled = !!need || idleOn;
       }
       if (banner) {
         banner.classList.toggle("show", need);
@@ -1522,6 +2447,8 @@
     }
 
     document.getElementById("authLoginBtn").onclick = () => openKiteLogin();
+    const logoutBtnEl = document.getElementById("logoutBtn");
+    if (logoutBtnEl) logoutBtnEl.onclick = () => logoutKite();
     const muteBtn = document.getElementById("linkAlertMuteBtn");
     if (muteBtn) muteBtn.onclick = () => muteLinkAlert();
 
@@ -1539,6 +2466,26 @@
     document.getElementById("btnSquareAllOpen").onclick = () => {
       doSquareOff({ allOpen: true });
     };
+    const btnSelNw = document.getElementById("btnSelAllOpenNw");
+    if (btnSelNw) {
+      btnSelNw.onclick = () => {
+        tradeRowsCacheNw.filter((r) => r.isOpen).forEach((r) => selectedTradeIdsNw.add(r.id));
+        paintTradesBody();
+      };
+    }
+    const btnClearNw = document.getElementById("btnClearSelNw");
+    if (btnClearNw) {
+      btnClearNw.onclick = () => {
+        selectedTradeIdsNw.clear();
+        paintTradesBody();
+      };
+    }
+    const btnSqNw = document.getElementById("btnSquareSelectedNw");
+    if (btnSqNw) {
+      btnSqNw.onclick = () => {
+        doSquareOff({ ids: [...selectedTradeIdsNw] });
+      };
+    }
 
     function candleBucket5m(epochSec) {
       // Align to IST 5-minute opens (UTC+5:30 → offset 19800)
@@ -1633,6 +2580,20 @@
       badge.className = "badge " + (live ? "live" : "paper");
       document.getElementById("liveBtn").textContent = live ? "ON" : "OFF";
       document.getElementById("liveBtn").className = live ? "danger" : "ok";
+      const chainCap = st.option_chain_db || {};
+      const capturing = chainCap.capturing !== false && !!chainCap.enabled;
+      const capBtn = document.getElementById("chainCapBtn");
+      if (capBtn) {
+        let label = capturing ? "ON" : "OFF";
+        if (chainCap.idle === "outside_session" && capturing) label = "ON·idle";
+        if (chainCap.idle === "capture_off") label = "OFF";
+        capBtn.textContent = label;
+        capBtn.className = capturing ? "ok" : "danger";
+        capBtn.title =
+          "Chain DB capture (current+next week ±10). Default ON each day. " +
+          (chainCap.last_ltp_ts ? `Last LTP ${chainCap.last_ltp_ts}` : "Waiting…") +
+          (chainCap.last_error ? ` · err ${chainCap.last_error}` : "");
+      }
 
       document.getElementById("sessionBadge").textContent = st.in_session ? "IN WINDOW" : "OUT OF WINDOW";
       const spotEl = document.getElementById("spot");
@@ -1671,12 +2632,16 @@
       rb.title = (pr.advice || "") + " | " + ((pr.reasons || []).join("; "));
       const late = st.scan?.late_report;
       const lb = document.getElementById("lateBadge");
+      const tokenWhen = formatTokenCreated((st.auth || {}).saved_at);
+      const tokenBit = tokenWhen ? ` · ${tokenWhen} IST` : "";
       if (late && late.late) {
-        lb.textContent = `LATE +${late.minutes_since_open || "?"}m`;
-        lb.title = late.message || "";
+        lb.textContent = `LATE +${late.minutes_since_open || "?"}m${tokenBit}`;
+        lb.title = (late.message || "Late start") +
+          ((st.auth || {}).saved_at ? ` | Kite session ${(st.auth || {}).saved_at}` : "");
       } else {
-        lb.textContent = "ON-TIME";
-        lb.title = "Started near open — live tracking";
+        lb.textContent = `ON-TIME${tokenBit}`;
+        lb.title = "Started near open — live tracking" +
+          ((st.auth || {}).saved_at ? ` | Kite session ${(st.auth || {}).saved_at}` : "");
       }
 
       const p = st.pnl || {};
@@ -1710,67 +2675,83 @@
       `;
 
       const act = st.activity || {};
-      const a1a = act.algo1 || {};
-      const a1on = !!st.config?.algo1_enabled;
-      const state = a1a.state || (st.in_session ? "SCANNING" : "OUT_OF_WINDOW");
-      const hbAge = Number(st.heartbeat?.age_sec);
-      const hbDead = Number.isFinite(hbAge) && hbAge > 90;
+      const a2s = st.algo2 || {};
+      const a2on = !!st.config?.algo2_enabled;
+      const state = a2s.phase || (st.in_session ? "SCAN" : "OUT_OF_WINDOW");
+      const hbAge = Number(st.heartbeat?.tick_age ?? st.heartbeat?.age_sec);
       const stall = st.stall_alert || {};
+      const tickStale = Number(stall.hb_age) > 120;
+      const hbDead = (Number.isFinite(hbAge) && hbAge > 120) || (stall.alerting && tickStale);
       const runBadge = document.getElementById("runBadge");
-      if (hbDead || stall.alerting) {
-        runBadge.textContent = `ALGO STUCK · ${Math.round(hbAge || stall.hb_age || 0)}s`;
+      if (hbDead) {
+        runBadge.textContent = `ALGO STUCK · ${Math.round(stall.hb_age || hbAge || 0)}s`;
         runBadge.className = "badge run-off";
-        runBadge.title = "Engine heartbeat stale — restart app / start_unattended.bat";
+        runBadge.title = stall.muted
+          ? "Trading loop stalled — silent restart in progress"
+          : "Trading loop stalled — restarting";
         const now = Date.now();
-        if (!window._stallBeepAt || now - window._stallBeepAt > 20000) {
+        if (!window._stallBeepAt || now - window._stallBeepAt > 60000) {
           window._stallBeepAt = now;
-          const why = stall.alerting
-            ? (stall.reason || "engine")
-            : (stall.data_reason || "data");
           showToast(
             stall.data_alerting && !stall.alerting
-              ? "Zerodha data stale — voice alert + waiting restore"
-              : "ENGINE DIED — voice alert + auto-restart"
+              ? "Zerodha quotes are stale"
+              : (stall.muted
+                ? "Trading loop stalled — restarting quietly"
+                : "Trading loop stalled — restarting")
           );
-          try {
-            const u = new SpeechSynthesisUtterance(
-              stall.alerting ? "Engine died" : "Zerodha data not updating"
-            );
-            u.rate = 1; u.volume = 1;
-            window.speechSynthesis.cancel();
-            window.speechSynthesis.speak(u);
-          } catch (_) {}
         }
-      } else if (!a1on) {
-        runBadge.textContent = "ALGO OFF";
+      } else if (!a2on) {
+        runBadge.textContent = "CONVERGENCE OFF";
         runBadge.className = "badge run-off";
-      } else if (state === "OUT_OF_WINDOW") {
-        runBadge.textContent = "ALGO WAITING WINDOW";
+      } else if (!st.in_session || state === "OUT_OF_WINDOW") {
+        runBadge.textContent = "CONVERGENCE WAITING WINDOW";
         runBadge.className = "badge run-wait";
-      } else if (["SCANNING", "WAITING", "BUYING", "SELLING", "HOLDING"].includes(state)) {
-        runBadge.textContent = "ALGO RUNNING · " + state;
-        runBadge.className = "badge run-on";
       } else {
-        runBadge.textContent = "ALGO · " + state;
-        runBadge.className = "badge run-wait";
+        runBadge.textContent = "CONVERGENCE · " + state;
+        runBadge.className = "badge run-on";
       }
       document.getElementById("actHeadline").textContent =
-        (a1on ? "RUNNING" : "OFF") + " · " + (act.headline || state);
-      document.getElementById("actA1").innerHTML =
-        `<strong>Algo1</strong> <span class="st-${state}">${state}</span>` +
-        ` <span title="${a1a.message || ""}">${a1a.phase || ""} ${a1a.message ? "· " + String(a1a.message).slice(0, 64) : ""}</span>`;
+        (a2on ? "CONVERGENCE" : "OFF") + " · " + (act.headline || state);
+      const actA1 = document.getElementById("actA1");
+      if (actA1) {
+        actA1.innerHTML = `<strong>FastTrack</strong> <span class="st-OFF">OFF</span>`;
+      }
+      const a2Lots = Math.max(1, Number(st.config?.algo2_lots || 1));
+      const lotSize = Math.max(1, Number(st.config?.lot_size || 75));
+      const a2nw = st.algo2nw || {};
+      const a2nwon = st.config?.algo2nw_enabled !== false;
+      document.getElementById("actA2").innerHTML =
+        `<strong>CW</strong> ${a2on ? (a2s.phase || "SCAN") : "OFF"}` +
+        ` · <b>${a2Lots} lot${a2Lots === 1 ? "" : "s"}</b>` +
+        ` <span title="${a2s.message || ""}">${a2s.message ? "· " + String(a2s.message).slice(0, 36) : ""}</span>`;
+      const actA2nw = document.getElementById("actA2nw");
+      if (actA2nw) {
+        actA2nw.innerHTML =
+          `<strong>NW</strong> ${a2nwon ? (a2nw.phase || "SCAN") : "OFF"}` +
+          ` · 46–54@${Number(st.config?.algo2nw_pair_exit_mult || 1.7).toFixed(2)}×` +
+          ` <span title="${a2nw.message || ""}">${a2nw.message ? "· " + String(a2nw.message).slice(0, 36) : ""}</span>`;
+      }
       document.getElementById("actOpen").innerHTML =
         `<strong>Open MTM</strong> <span class="amt ${amtCls(act.open_mtm)}">${money(act.open_mtm)}</span>` +
         ` · ${act.open_count || 0} pos`;
       document.getElementById("actInvested").innerHTML =
         `<strong>Capital used</strong> ${money(act.open_invested)}`;
+      renderCriteriaLive(st);
       const cap = Number(st.config?.capital_inr || 0);
-      const dep = Math.round(Number(st.config?.deploy_pct_of_balance || 0) * 100);
+      const a2cap = Number(st.config?.algo2_capital_inr ?? cap);
+      const nwcap = Number(st.config?.algo2nw_capital_inr ?? a2cap);
       const capBadge = document.getElementById("capitalBadge");
       if (capBadge) {
-        capBadge.textContent = cap
-          ? `CAPITAL ₹${cap.toLocaleString("en-IN")} · auto ${dep || 75}%`
+        capBadge.textContent = a2cap
+          ? `CW ₹${a2cap.toLocaleString("en-IN")} · NW ₹${nwcap.toLocaleString("en-IN")}`
           : "CAPITAL —";
+        capBadge.title =
+          `Algo1 ₹${Number(st.config?.algo1_capital_inr ?? cap).toLocaleString("en-IN")} · ` +
+          `Algo2 ₹${a2cap.toLocaleString("en-IN")} · NW ₹${nwcap.toLocaleString("en-IN")}`;
+      }
+      const lotsBadge = document.getElementById("lotsBadge");
+      if (lotsBadge) {
+        lotsBadge.textContent = `LOTS ${a2Lots} · qty ${a2Lots * lotSize}`;
       }
 
       renderAlgoLog(st);
@@ -1782,7 +2763,8 @@
       document.getElementById("idxmsg").textContent =
         `RSI ${idx.rsi14?.toFixed?.(0) ?? "—"} · S ${idx.support?.toFixed?.(0) ?? "—"} R ${idx.resistance?.toFixed?.(0) ?? "—"}${orbTxt}`;
 
-      syncLiveOrderChart(st);
+      renderConvergence(st);
+      renderConvergenceNw(st);
 
       renderTrades(
         st.day_trades || [...(st.open_trades || []), ...(st.all_trades || [])],
@@ -1800,6 +2782,28 @@
         }
       }
     }
+
+    document.getElementById("chainCapBtn").onclick = async () => {
+      const st = await (await fetch("/api/state")).json();
+      const cap = st.option_chain_db || {};
+      const next = !(cap.capturing !== false && !!cap.enabled);
+      if (!cap.enabled && next) {
+        showToast("Chain DB disabled in config (option_chain_db_enabled)");
+        return;
+      }
+      const res = await fetch("/api/option_chain_db/capture", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ capturing: next }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(body.error || "Capture toggle failed");
+        return;
+      }
+      showToast(next ? "Chain capture ON for today" : "Chain capture OFF (resets ON tomorrow)");
+      tick();
+    };
 
     document.getElementById("liveBtn").onclick = async () => {
       const st = await (await fetch("/api/state")).json();
@@ -1833,49 +2837,147 @@
       tick();
     };
 
+    function refreshLotsHint() {
+      const lotsEl = document.getElementById("s_a2lots");
+      const hint = document.getElementById("s_lotsHint");
+      if (!lotsEl || !hint) return;
+      const lots = Math.min(15, Math.max(1, Number(lotsEl.value) || 1));
+      const lotSize = Number(lotsEl.dataset.lotSize || 75);
+      hint.textContent =
+        `Qty per leg = ${lots} × ${lotSize} = ${lots * lotSize}. Applies to next Convergence entry (live sync on Save).`;
+    }
+
     document.getElementById("settingsBtn").onclick = async () => {
       const st = await (await fetch("/api/state")).json();
       const cap = Number(st.config.capital_inr || 100000);
       const depPct = Math.round(Number(st.config.deploy_pct_of_balance || 1) * 100);
       const depClamped = Math.min(100, Math.max(50, depPct || 100));
+      const a2Lots = Math.min(15, Math.max(1, Number(st.config.algo2_lots || 4)));
+      const lotSize = Math.max(1, Number(st.config.lot_size || 75));
+      const pickCap = (v) => (v != null && Number.isFinite(Number(v)) ? Number(v) : cap);
+      const pickDep = (v) => {
+        if (v == null || !Number.isFinite(Number(v))) return depClamped;
+        const n = Number(v);
+        return Math.min(100, Math.max(50, n > 1.5 ? Math.round(n) : Math.round(n * 100)));
+      };
       document.getElementById("s_capital").value = cap;
-      document.getElementById("s_deploy").value = depClamped;
-      document.getElementById("s_a1en").checked = !!st.config.algo1_enabled;
+      document.getElementById("s_a1cap").value = pickCap(st.config.algo1_capital_inr);
+      document.getElementById("s_a2cap").value = pickCap(st.config.algo2_capital_inr);
+      document.getElementById("s_a2nwcap").value = pickCap(
+        st.config.algo2nw_capital_inr ?? st.config.algo2_capital_inr
+      );
+      document.getElementById("s_a1dep").value = pickDep(st.config.algo1_deploy_pct);
+      document.getElementById("s_a2dep").value = pickDep(st.config.algo2_deploy_pct);
+      document.getElementById("s_a2nwdep").value = pickDep(
+        st.config.algo2nw_deploy_pct ?? st.config.algo2_deploy_pct
+      );
       document.getElementById("s_a2en").checked = !!st.config.algo2_enabled;
+      const nwEn = document.getElementById("s_a2nwen");
+      if (nwEn) nwEn.checked = st.config.algo2nw_enabled !== false;
       document.getElementById("s_max").value = st.config.max_trades_per_day;
-      const budget = Math.round(cap * (depClamped / 100));
+      const lotsInput = document.getElementById("s_a2lots");
+      lotsInput.value = a2Lots;
+      lotsInput.dataset.lotSize = String(lotSize);
       document.getElementById("s_deployHint").textContent =
-        `Each entry auto-packs lots to use ~₹${budget.toLocaleString("en-IN")} (${depClamped}% of capital). Dual Nifty+Sensex.`;
+        `Fallback ₹${cap.toLocaleString("en-IN")} · Algo2 ₹${pickCap(st.config.algo2_capital_inr).toLocaleString("en-IN")} · NW ₹${pickCap(st.config.algo2nw_capital_inr ?? st.config.algo2_capital_inr).toLocaleString("en-IN")}`;
+      refreshLotsHint();
       document.getElementById("settingsModal").classList.add("open");
     };
+    document.getElementById("s_a2lots").addEventListener("input", refreshLotsHint);
     document.getElementById("closeSettings").onclick = () =>
       document.getElementById("settingsModal").classList.remove("open");
     document.getElementById("saveSettings").onclick = async () => {
-      let deployPct = Number(document.getElementById("s_deploy").value);
-      if (!Number.isFinite(deployPct)) deployPct = 100;
-      deployPct = Math.min(100, Math.max(50, deployPct));
-      const capital = Math.max(25000, Number(document.getElementById("s_capital").value) || 100000);
+      const readCap = (id) => Math.max(25000, Number(document.getElementById(id).value) || 100000);
+      const readDep = (id) => {
+        let v = Number(document.getElementById(id).value);
+        if (!Number.isFinite(v)) v = 100;
+        return Math.min(100, Math.max(50, v)) / 100;
+      };
+      const capital = readCap("s_capital");
+      const a1Cap = readCap("s_a1cap");
+      const a2Cap = readCap("s_a2cap");
+      const a2nwCap = readCap("s_a2nwcap");
+      const a1Dep = readDep("s_a1dep");
+      const a2Dep = readDep("s_a2dep");
+      const a2nwDep = readDep("s_a2nwdep");
+      const convOn = document.getElementById("s_a2en").checked;
+      const convNwOn = document.getElementById("s_a2nwen")
+        ? document.getElementById("s_a2nwen").checked
+        : true;
+      let a2Lots = Number(document.getElementById("s_a2lots").value);
+      if (!Number.isFinite(a2Lots)) a2Lots = 4;
+      a2Lots = Math.min(15, Math.max(1, Math.round(a2Lots)));
+      const lotSize = Math.max(1, Number(document.getElementById("s_a2lots").dataset.lotSize || 75));
       await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           capital_inr: capital,
-          deploy_pct_of_balance: deployPct / 100,
-          dual_deploy_pct: deployPct / 100,
+          deploy_pct_of_balance: a2Dep,
+          dual_deploy_pct: a2Dep,
+          algo1_capital_inr: a1Cap,
+          algo2_capital_inr: a2Cap,
+          algo2nw_capital_inr: a2nwCap,
+          algo1_deploy_pct: a1Dep,
+          algo2_deploy_pct: a2Dep,
+          algo2nw_deploy_pct: a2nwDep,
+          algo2_lots: a2Lots,
           max_lots_per_trade: 15,
           min_lots_per_trade: 1,
-          algo1_enabled: document.getElementById("s_a1en").checked,
-          algo2_enabled: document.getElementById("s_a2en").checked,
+          // Convergence-only book — keep every other algo hard-off on save
+          algo1_enabled: false,
+          algo2_enabled: convOn,
+          algo2nw_enabled: convNwOn,
+          dual_mode: false,
+          directional_mode: false,
+          require_convergence: true,
+          enable_orb_breakout: false,
+          enable_orb_breakdown: false,
+          enable_trend_follow: false,
+          enable_sr_reclaim: false,
+          enable_sr_reject: false,
+          allow_shakeout_entry: false,
+          enable_daily_pa: false,
+          enable_daily_soft_scalp: false,
+          enable_micro_scalp: false,
+          impulse_entry_enabled: false,
+          pre_event_entry_enabled: false,
+          post_decay_entry_enabled: false,
+          post_decay_standalone_entry: false,
+          atm_channel_enabled: false,
+          atm_channel_entries: false,
+          atm_channel_allow_edge: false,
+          pe_range_enabled: false,
+          pe_range_entries: false,
+          pe_range_allow_edge: false,
+          pe_range_allow_break: false,
+          fii_oi_scan_enabled: false,
           max_trades_per_day: Number(document.getElementById("s_max").value),
         }),
       });
-      showToast(`Capital ₹${capital.toLocaleString("en-IN")} · auto deploy ${deployPct}%`);
+      showToast(
+        `CW ${convOn ? "ON" : "OFF"} ₹${a2Cap.toLocaleString("en-IN")} · ` +
+        `NW ${convNwOn ? "ON" : "OFF"} ₹${a2nwCap.toLocaleString("en-IN")} · ` +
+        `A1 ₹${a1Cap.toLocaleString("en-IN")}`
+      );
       document.getElementById("settingsModal").classList.remove("open");
       tick();
     };
     document.getElementById("reportsBtn").onclick = () => {
       const live = document.getElementById("modeBadge")?.textContent === "LIVE";
       window.open(live ? "/reports?mode=live" : "/reports", "_blank", "noopener,noreferrer");
+    };
+    document.getElementById("chainFilterBtn").onclick = () => {
+      window.open("/option-chain-filter", "_blank", "noopener,noreferrer");
+    };
+    document.getElementById("atmPremBtn").onclick = () => {
+      const day = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date());
+      window.open(`/atm-premiums?day=${day}&week=current`, "_blank", "noopener,noreferrer");
     };
 
     document.querySelectorAll("#entryModeTabs button").forEach((btn) => {
@@ -1892,24 +2994,23 @@
     document.querySelectorAll(".max-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         const id = btn.dataset.max;
-        const on = grid.classList.contains(`max-${id}`);
-        grid.classList.remove("max-a1", "max-alog", "max-nifty", "max-trades");
-        if (!on) {
-          grid.classList.add(`max-${id}`);
+        const panel = grid.querySelector(`.panel[data-panel="${id}"]`);
+        const already = panel && panel.classList.contains("is-max");
+        grid.classList.remove("is-max");
+        grid.querySelectorAll(".panel.is-max").forEach((p) => p.classList.remove("is-max"));
+        document.querySelectorAll(".max-btn").forEach((b) => { b.textContent = "Maximize"; });
+        if (!already && panel) {
+          grid.classList.add("is-max");
+          panel.classList.add("is-max");
           btn.textContent = "Restore";
-        } else {
-          btn.textContent = "Maximize";
         }
-        document.querySelectorAll(".max-btn").forEach((b) => {
-          if (b !== btn) b.textContent = "Maximize";
-        });
         window.dispatchEvent(new Event("resize"));
       });
     });
 
     loadNifty();
     tick();
-    setInterval(tick, 1000);
+    setInterval(tick, 500);
     setInterval(loadNifty, 15000);
   </script>
 </body>

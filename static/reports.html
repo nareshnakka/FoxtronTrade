@@ -92,6 +92,13 @@
       <button data-mode="paper">Paper only</button>
       <button data-mode="live">Live only</button>
     </div>
+    <div class="tabs" id="algoTabs">
+      <button data-algo="all" class="active">All algos</button>
+      <button data-algo="algo2">Algo2 CW</button>
+      <button data-algo="algo2nw">Algo2 NW</button>
+      <button data-algo="algo1">Algo1</button>
+      <button data-algo="algo1_sx">Sensex</button>
+    </div>
     <div class="tabs" id="periodTabs">
       <button data-p="daily">Daily</button>
       <button data-p="weekly">Weekly</button>
@@ -203,8 +210,49 @@
     let report = null;
     let period = "all"; // default: full retained history (paper + live)
     let mode = "combined"; // combined | paper | live
+    let algoFilter = "all"; // all | algo1 | algo2 | algo2nw | …
     let customFrom = "";
     let customTo = "";
+
+    function algoLabel(a) {
+      return ({
+        algo1: "Algo1",
+        algo1_sx: "Sensex",
+        algo2: "Algo2 CW",
+        algo2nw: "Algo2 NW",
+        all: "All algos",
+      })[a] || String(a || "").toUpperCase();
+    }
+
+    function statsFromTrades(rows) {
+      const pnlRows = (rows || []).filter((t) => t.ledger_kind !== "live_attempt");
+      const wins = pnlRows.filter((t) => Number(t.pnl_rupees || 0) > 0);
+      const losses = pnlRows.filter((t) => Number(t.pnl_rupees || 0) < 0);
+      const gross = pnlRows.reduce((a, t) => a + Number(t.pnl_rupees || 0), 0);
+      const net = pnlRows.reduce((a, t) => a + netOf(t), 0);
+      const invested = pnlRows.reduce((a, t) => a + investedOf(t), 0);
+      const lots = pnlRows.reduce((a, t) => a + Number(t.lots || 0), 0);
+      const pnls = pnlRows.map((t) => Number(t.pnl_rupees || 0));
+      return {
+        trades: pnlRows.length,
+        wins: wins.length,
+        losses: losses.length,
+        win_rate: pnlRows.length
+          ? Math.round((wins.length / pnlRows.length) * 1000) / 10
+          : 0,
+        pnl_rupees: Math.round(gross * 100) / 100,
+        net_pnl_rupees: Math.round(net * 100) / 100,
+        invested: Math.round(invested * 100) / 100,
+        lots,
+        best: pnls.length ? Math.max(...pnls) : 0,
+        worst: pnls.length ? Math.min(...pnls) : 0,
+      };
+    }
+
+    function filterByAlgo(rows) {
+      if (!algoFilter || algoFilter === "all") return rows || [];
+      return (rows || []).filter((t) => String(t.algo || "") === algoFilter);
+    }
 
     function investedOf(t) {
       if (t.invested != null) return Number(t.invested);
@@ -236,43 +284,61 @@
       return period === "custom" && report.custom_range;
     }
 
+    function usingAlgoApiFilter() {
+      return algoFilter && algoFilter !== "all" && report.filter && report.filter.algo === algoFilter;
+    }
+
     function periodBlock() {
-      if (usingCustom()) {
-        const cr = report.custom_range;
-        return {
+      let block;
+      if (usingCustom() || usingAlgoApiFilter()) {
+        const cr = usingCustom() ? report.custom_range : report.filter;
+        block = {
           stats: cr.stats || {},
-          by_algo: {
-            algo1: {
-              trades: cr.by_algo?.algo1?.trades || 0,
-              pnl_rupees: cr.by_algo?.algo1?.pnl_rupees || 0,
-              win_rate: 0,
-            },
-            algo2: {
-              trades: cr.by_algo?.algo2?.trades || 0,
-              pnl_rupees: cr.by_algo?.algo2?.pnl_rupees || 0,
-              win_rate: 0,
-            },
-          },
+          by_algo: cr.by_algo || {},
           trades: cr.trades || [],
         };
+      } else if (mode === "paper") {
+        block = report.periods_paper[period];
+      } else if (mode === "live") {
+        block = report.periods_live[period];
+      } else {
+        block = report.periods[period];
       }
-      if (mode === "paper") return report.periods_paper[period];
-      if (mode === "live") return report.periods_live[period];
-      return report.periods[period];
+      if (!block) block = { stats: {}, by_algo: {}, trades: [] };
+      if (algoFilter && algoFilter !== "all" && !usingCustom() && !usingAlgoApiFilter()) {
+        const trades = filterByAlgo(block.trades || []);
+        return {
+          stats: statsFromTrades(trades),
+          by_algo: block.by_algo || {},
+          trades,
+        };
+      }
+      return block;
     }
 
     function seriesForMode() {
-      if (usingCustom()) return report.custom_range.daily_series || [];
+      if (usingCustom() || usingAlgoApiFilter()) {
+        const src = usingCustom() ? report.custom_range : report.filter;
+        return src.daily_series || [];
+      }
       if (mode === "paper") return report.daily_series_paper || [];
       if (mode === "live") return report.daily_series_live || [];
       return report.daily_series || [];
     }
 
     function openForMode() {
-      if (usingCustom()) return report.custom_range.open_trades || [];
-      if (mode === "paper") return report.open_paper || [];
-      if (mode === "live") return report.open_live || [];
-      return report.open_trades || [];
+      let opens;
+      if (usingCustom() || usingAlgoApiFilter()) {
+        const src = usingCustom() ? report.custom_range : report.filter;
+        opens = src.open_trades || [];
+      } else if (mode === "paper") {
+        opens = report.open_paper || [];
+      } else if (mode === "live") {
+        opens = report.open_live || [];
+      } else {
+        opens = report.open_trades || [];
+      }
+      return filterByAlgo(opens);
     }
 
     function card(label, value, sub, extraClass = "") {
@@ -404,15 +470,26 @@
       ].join("");
 
       const algoNames = Object.keys(p.by_algo || {});
-      const algoOrder = ["algo1", "algo1_sx", "algo2"].filter((a) => algoNames.includes(a))
-        .concat(algoNames.filter((a) => !["algo1", "algo1_sx", "algo2"].includes(a)));
-      const algoLabel = (a) => a === "algo1" ? "NIFTY" : a === "algo1_sx" ? "SENSEX" : a.toUpperCase();
-      document.getElementById("algoCards").innerHTML = (algoOrder.length ? algoOrder : ["algo1", "algo1_sx"]).map((a) => {
+      const algoOrder = ["algo2", "algo2nw", "algo1", "algo1_sx"].filter((a) => algoNames.includes(a))
+        .concat(algoNames.filter((a) => !["algo1", "algo1_sx", "algo2", "algo2nw"].includes(a)));
+      document.getElementById("algoCards").innerHTML = (algoOrder.length ? algoOrder : ["algo2", "algo2nw"]).map((a) => {
         const st = (p.by_algo || {})[a] || {};
-        return card(algoLabel(a), st.pnl_rupees || 0,
-          `${st.trades || 0} trades · WR ${st.win_rate || 0}%` +
-          (a === "algo1_sx" || mode === "live" ? ` · conf ${st.live_confirmed || 0}` : ""));
+        const active = algoFilter === a ? " style=\"outline:1px solid var(--accent)\"" : "";
+        return `<div class="card"${active} data-pick-algo="${a}" style="cursor:pointer">
+          <div class="label">${algoLabel(a)}</div>
+          <div class="value ${cls(st.pnl_rupees || 0)}">${money(st.pnl_rupees || 0)}</div>
+          <div class="split">${st.trades || 0} trades · WR ${st.win_rate || 0}%</div>
+        </div>`;
       }).join("");
+      document.querySelectorAll("[data-pick-algo]").forEach((el) => {
+        el.onclick = () => {
+          algoFilter = el.dataset.pickAlgo || "all";
+          document.querySelectorAll("#algoTabs button").forEach((b) => {
+            b.classList.toggle("active", b.dataset.algo === algoFilter);
+          });
+          load();
+        };
+      });
 
       const rows = p.trades || [];
       const dayMap = {};
@@ -459,7 +536,9 @@
       const rangeLbl = usingCustom()
         ? `custom ${customFrom || "…"} → ${customTo || "…"}`
         : period;
-      document.getElementById("dayPnlTitle").textContent = `Day-wise P&L — ${mode} / ${rangeLbl}`;
+      const algoLbl = algoLabel(algoFilter);
+      document.getElementById("dayPnlTitle").textContent =
+        `Day-wise P&L — ${mode} / ${algoLbl} / ${rangeLbl}`;
       document.getElementById("dayPnlBody").innerHTML = dayRows.length
         ? dayRows.map((d) => `<tr>
             <td>${d.date}</td>
@@ -491,7 +570,8 @@
           })()
         : `<tr><td colspan="9" class="empty">No day P&L for this period</td></tr>`;
 
-      document.getElementById("tableTitle").textContent = `Closed trades — ${mode} / ${rangeLbl}`;
+      document.getElementById("tableTitle").textContent =
+        `Closed trades — ${mode} / ${algoLbl} / ${rangeLbl}`;
       const fillRows = rows.filter((t) => t.ledger_kind !== "live_attempt");
       document.getElementById("tbody").innerHTML = fillRows.length
         ? fillRows.map((t) => {
@@ -546,6 +626,7 @@
 
       const attempts = (report.live_attempts || []).filter((t) => {
         if (mode === "paper") return false;
+        if (algoFilter && algoFilter !== "all" && String(t.algo || "") !== algoFilter) return false;
         return true;
       });
       const attPanel = document.getElementById("liveAttemptsPanel");
@@ -575,6 +656,7 @@
     async function load() {
       const q = new URLSearchParams();
       q.set("mode", mode);
+      if (algoFilter && algoFilter !== "all") q.set("algo", algoFilter);
       if (period === "custom") {
         if (customFrom) q.set("from", customFrom);
         if (customTo) q.set("to", customTo);
@@ -598,7 +680,7 @@
       render();
     }
 
-    // Deep-link: /reports?mode=live|paper|combined
+    // Deep-link: /reports?mode=live|paper|combined&algo=algo2|algo2nw|…
     try {
       const sp = new URLSearchParams(location.search);
       const m = (sp.get("mode") || "").toLowerCase();
@@ -611,6 +693,13 @@
             if (mode === "paper") b.classList.add("paper-active");
             if (mode === "live") b.classList.add("live-active");
           }
+        });
+      }
+      const a = (sp.get("algo") || "").toLowerCase();
+      if (a && ["all", "algo1", "algo1_sx", "algo2", "algo2nw"].includes(a)) {
+        algoFilter = a;
+        document.querySelectorAll("#algoTabs button").forEach((b) => {
+          b.classList.toggle("active", b.dataset.algo === algoFilter);
         });
       }
     } catch (_) {}
@@ -641,6 +730,14 @@
         btn.classList.add("active");
         if (mode === "paper") btn.classList.add("paper-active");
         if (mode === "live") btn.classList.add("live-active");
+        load();
+      };
+    });
+    document.querySelectorAll("#algoTabs button").forEach((btn) => {
+      btn.onclick = () => {
+        document.querySelectorAll("#algoTabs button").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        algoFilter = btn.dataset.algo || "all";
         load();
       };
     });

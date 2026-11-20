@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import threading
 from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -8,6 +9,28 @@ from zoneinfo import ZoneInfo
 from kite_client import get_authenticated_kite
 
 IST = ZoneInfo("Asia/Kolkata")
+
+
+def _ltp_timed(kite: Any, keys: list[str], *, timeout: float = 10.0) -> dict[str, Any]:
+    """kite.ltp with hard timeout — bare calls hang forever and kill the engine."""
+    if not keys:
+        return {}
+    box: dict[str, Any] = {"q": {}, "err": None}
+
+    def _run() -> None:
+        try:
+            box["q"] = kite.ltp(keys) or {}
+        except Exception as exc:  # noqa: BLE001
+            box["err"] = exc
+
+    th = threading.Thread(target=_run, name="scanner-ltp", daemon=True)
+    th.start()
+    th.join(timeout=max(1.0, float(timeout)))
+    if th.is_alive():
+        raise TimeoutError(f"kite.ltp timeout after {timeout}s ({len(keys)} keys)")
+    if box["err"] is not None:
+        raise box["err"]
+    return box["q"]
 
 _MONTHLY = {
     "JAN": 1,
@@ -90,10 +113,11 @@ def _refresh_symbol_expiry_cache(nifty_opts: list[dict[str, Any]] | None = None)
     today = datetime.now(IST).date()
     if nifty_opts is None:
         try:
-            kite = get_authenticated_kite()
+            from foxtrade.kite_cache import get_instruments
+
             nifty_opts = [
                 i
-                for i in kite.instruments("NFO")
+                for i in get_instruments("NFO")
                 if i["name"] == "NIFTY" and i["instrument_type"] in ("CE", "PE")
             ]
         except Exception:
@@ -273,6 +297,61 @@ def reject_same_day_expiry(
     )
 
 
+def resolve_atm_wing_instruments(
+    atm: int | float,
+    *,
+    expiry: date | str | None = None,
+    depth: int = 2,
+    step: int = 50,
+) -> list[dict[str, Any]]:
+    """
+    CE+PE at ATM and ATM±1..depth for diagonal merge gate.
+    Uses trade-week expiry if expiry omitted.
+    """
+    from foxtrade.kite_cache import get_instruments
+
+    atm_i = int(round(float(atm) / step) * step)
+    inst = get_instruments("NFO", block=True)
+    nifty = [i for i in inst if i["name"] == "NIFTY" and i["instrument_type"] in ("CE", "PE")]
+    today = datetime.now(IST).date()
+    if expiry is None:
+        cur_exp, _next, trade_exps, _ = trade_expiries_for_scan(nifty, today)
+        exp = cur_exp or (next(iter(trade_exps), None) if trade_exps else None)
+    else:
+        exp = _as_date(expiry)
+    if exp is None:
+        return []
+    strikes = [atm_i + step * d for d in range(-depth, depth + 1)]
+    out: list[dict[str, Any]] = []
+    for side in ("CE", "PE"):
+        for k in strikes:
+            match = next(
+                (
+                    i
+                    for i in nifty
+                    if _as_date(i["expiry"]) == exp
+                    and i["instrument_type"] == side
+                    and int(float(i["strike"])) == int(k)
+                ),
+                None,
+            )
+            if not match:
+                continue
+            out.append(
+                {
+                    "tradingsymbol": match["tradingsymbol"],
+                    "instrument_token": int(match["instrument_token"]),
+                    "instrument_type": side,
+                    "strike": float(k),
+                    "expiry": str(exp),
+                    "ltp": None,
+                    "wing": True,
+                    "atm": atm_i,
+                }
+            )
+    return out
+
+
 def scan_premium_band(
     premium_low: float = 125,
     premium_high: float = 145,
@@ -287,13 +366,15 @@ def scan_premium_band(
     (e.g. crushed to 50 or expanded to 200).
     """
     kite = get_authenticated_kite()
-    spot = float(kite.ltp(["NSE:NIFTY 50"])["NSE:NIFTY 50"]["last_price"])
+    spot = float(_ltp_timed(kite, ["NSE:NIFTY 50"])["NSE:NIFTY 50"]["last_price"])
     atm = round(spot / 50) * 50
     today = datetime.now(IST).date()
     w_low = wide_low if wide_low is not None else premium_low
     w_high = wide_high if wide_high is not None else premium_high
 
-    inst = kite.instruments("NFO")
+    from foxtrade.kite_cache import get_instruments
+
+    inst = get_instruments("NFO")
     nifty = [i for i in inst if i["name"] == "NIFTY" and i["instrument_type"] in ("CE", "PE")]
     _refresh_symbol_expiry_cache(nifty)
     cur_exp, next_exp, trade_exps, expiry_day = trade_expiries_for_scan(nifty, today)
@@ -313,7 +394,7 @@ def scan_premium_band(
         keys = [f"NFO:{i['tradingsymbol']}" for i in subset]
         quotes: dict[str, Any] = {}
         for i in range(0, len(keys), 400):
-            quotes.update(kite.ltp(keys[i : i + 400]))
+            quotes.update(_ltp_timed(kite, keys[i : i + 400], timeout=12.0))
         for i in subset:
             sym = str(i["tradingsymbol"])
             exp_d = _as_date(i["expiry"])
@@ -355,15 +436,16 @@ def _best_convergence_pair(
     candidates: list[dict[str, Any]],
     low: float,
     high: float,
+    tol: float = 3.0,
 ) -> dict[str, Any] | None:
-    """Prefer same-strike CE/PE closest in premium inside band."""
+    """Among in-band merges: real convergence first, then highest merge mid."""
     by_key: dict[tuple[str, float], dict[str, dict[str, Any]]] = {}
     for c in candidates:
         key = (c["expiry"], c["strike"])
         by_key.setdefault(key, {})[c["instrument_type"]] = c
 
     best = None
-    best_key = None  # (-mid, gap) → prefer higher merge mid, then tighter gap
+    best_key = None  # (not converged, -mid, gap)
     for (_exp, _strike), sides in by_key.items():
         if "CE" not in sides or "PE" not in sides:
             continue
@@ -372,8 +454,10 @@ def _best_convergence_pair(
         mid = (ce["ltp"] + pe["ltp"]) / 2
         if not (low <= mid <= high):
             continue
-        # Among in-band merges: highest mid wins; equal mid → tighter gap
-        key = (-mid, gap)
+        converged = gap <= tol
+        # Converged pair beats a higher-mid pair that is not actually merging;
+        # within the same state, highest merge mid wins, then tighter gap.
+        key = (0 if converged else 1, -mid, gap)
         if best_key is None or key < best_key:
             best_key = key
             best = {
@@ -383,6 +467,8 @@ def _best_convergence_pair(
                 "pe": pe,
                 "gap": round(gap, 2),
                 "mid": round(mid, 2),
+                "converged": converged,
+                "candidates": len(by_key),
             }
 
     # fallback: closest CE and PE by premium even if different strikes
@@ -397,7 +483,8 @@ def _best_convergence_pair(
                 mid = (ce["ltp"] + pe["ltp"]) / 2
                 if not (low <= mid <= high):
                     continue
-                key = (-mid, gap)
+                converged = gap <= tol
+                key = (0 if converged else 1, -mid, gap)
                 if best_key is None or key < best_key:
                     best_key = key
                     best = {
@@ -407,6 +494,8 @@ def _best_convergence_pair(
                         "pe": pe,
                         "gap": round(gap, 2),
                         "mid": round(mid, 2),
+                        "converged": converged,
+                        "candidates": len(by_key),
                     }
     return best
 
@@ -414,6 +503,84 @@ def _best_convergence_pair(
 def is_converged(ce_ltp: float, pe_ltp: float, tol: float, low: float, high: float) -> bool:
     mid = (ce_ltp + pe_ltp) / 2
     return abs(ce_ltp - pe_ltp) <= tol and low <= mid <= high
+
+
+def scan_next_week_premium_band(
+    premium_low: float = 46,
+    premium_high: float = 54,
+    strike_window: float = 800,
+    *,
+    wide_low: float | None = None,
+    wide_high: float | None = None,
+) -> dict[str, Any]:
+    """
+    Scan NEXT weekly expiry only (not current trade week) for CE/PE merge band.
+    Used by Convergence Next-Week (algo2nw) alongside current-week algo2.
+    """
+    kite = get_authenticated_kite()
+    spot = float(_ltp_timed(kite, ["NSE:NIFTY 50"])["NSE:NIFTY 50"]["last_price"])
+    atm = round(spot / 50) * 50
+    today = datetime.now(IST).date()
+    w_low = wide_low if wide_low is not None else premium_low
+    w_high = wide_high if wide_high is not None else premium_high
+
+    from foxtrade.kite_cache import get_instruments
+
+    inst = get_instruments("NFO")
+    nifty = [i for i in inst if i["name"] == "NIFTY" and i["instrument_type"] in ("CE", "PE")]
+    _refresh_symbol_expiry_cache(nifty)
+    cur_exp, next_exp, _trade_exps, expiry_day = trade_expiries_for_scan(nifty, today)
+    # Always the labeled next week — even on expiry day (then next_exp is week-after)
+    target = next_exp
+    if target is None or target <= today:
+        raise RuntimeError(f"No next-week expiry (today={today}, cur={cur_exp}, next={next_exp})")
+
+    subset = [
+        i
+        for i in nifty
+        if _as_date(i["expiry"]) == target and abs(float(i["strike"]) - atm) <= strike_window
+    ]
+    keys = [f"NFO:{i['tradingsymbol']}" for i in subset]
+    quotes: dict[str, Any] = {}
+    for i in range(0, len(keys), 400):
+        quotes.update(_ltp_timed(kite, keys[i : i + 400], timeout=12.0))
+
+    candidates: list[dict[str, Any]] = []
+    for i in subset:
+        sym = str(i["tradingsymbol"])
+        exp_d = _as_date(i["expiry"])
+        if exp_d <= today:
+            continue
+        lp = quotes.get(f"NFO:{sym}", {}).get("last_price")
+        if lp is None:
+            continue
+        lp_f = float(lp)
+        if w_low <= lp_f <= w_high:
+            candidates.append(
+                {
+                    "tradingsymbol": sym,
+                    "instrument_token": int(i["instrument_token"]),
+                    "instrument_type": i["instrument_type"],
+                    "strike": float(i["strike"]),
+                    "expiry": str(exp_d),
+                    "ltp": lp_f,
+                    "in_core_band": premium_low <= lp_f <= premium_high,
+                }
+            )
+
+    pair = _best_convergence_pair(candidates, premium_low, premium_high)
+    return {
+        "spot": spot,
+        "atm": atm,
+        "current_expiry": str(cur_exp),
+        "next_expiry": str(target),
+        "expiry": str(target),
+        "expiry_day": expiry_day,
+        "week": "next",
+        "band": {"low": premium_low, "high": premium_high},
+        "candidates": candidates,
+        "pair": pair,
+    }
 
 
 def find_next_week_option(
@@ -428,7 +595,9 @@ def find_next_week_option(
     """
     kite = get_authenticated_kite()
     today = datetime.now(IST).date()
-    inst = kite.instruments("NFO")
+    from foxtrade.kite_cache import get_instruments
+
+    inst = get_instruments("NFO")
     nifty = [i for i in inst if i["name"] == "NIFTY" and i["instrument_type"] in ("CE", "PE")]
     cur_exp, next_exp = _expiries(nifty, today)
     # If we know the held contract's expiry and it is already "current", roll to next
@@ -468,7 +637,7 @@ def find_next_week_option(
         match = min(pool, key=lambda i: abs(float(i["strike"]) - float(strike)))
 
     key = f"NFO:{match['tradingsymbol']}"
-    ltp = float(kite.ltp([key])[key]["last_price"])
+    ltp = float(_ltp_timed(kite, [key])[key]["last_price"])
     return {
         "tradingsymbol": match["tradingsymbol"],
         "instrument_token": int(match["instrument_token"]),
@@ -505,11 +674,13 @@ def scan_premium_band_underlying(
     w_lo = float(wide_low if wide_low is not None else spec.get("wide_low") or p_lo)
     w_hi = float(wide_high if wide_high is not None else spec.get("wide_high") or p_hi)
 
-    spot = float(kite.ltp([spot_sym])[spot_sym]["last_price"])
+    spot = float(_ltp_timed(kite, [spot_sym])[spot_sym]["last_price"])
     atm = round(spot / step) * step
     today = datetime.now(IST).date()
 
-    inst = kite.instruments(str(spec["opt_exchange"]))
+    from foxtrade.kite_cache import get_instruments
+
+    inst = get_instruments(str(spec["opt_exchange"]))
     opts = [
         i
         for i in inst
@@ -533,7 +704,7 @@ def scan_premium_band_underlying(
         keys = [f"{prefix}:{i['tradingsymbol']}" for i in subset]
         quotes: dict[str, Any] = {}
         for i in range(0, len(keys), 400):
-            quotes.update(kite.ltp(keys[i : i + 400]))
+            quotes.update(_ltp_timed(kite, keys[i : i + 400], timeout=12.0))
         for i in subset:
             sym = str(i["tradingsymbol"])
             exp_d = _as_date(i["expiry"])

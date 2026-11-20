@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Option chain — Zerodha-style</title>
+  <style>
+    :root {
+      --bg: #0b1017;
+      --panel: #141c27;
+      --line: #243041;
+      --text: #e8eef7;
+      --muted: #8fa0b8;
+      --accent: #3d9cf0;
+      --ce: #ef5350;
+      --pe: #26a69a;
+      --atm: #f0b429;
+      --itm-ce: rgba(239, 83, 80, 0.14);
+      --itm-pe: rgba(38, 166, 154, 0.14);
+      --atm-row: rgba(240, 180, 41, 0.16);
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center;
+      padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--line);
+    }
+    h1 { font-size: 1rem; margin: 0; font-weight: 650; }
+    .meta { color: var(--muted); font-size: 0.78rem; }
+    .grow { flex: 1; }
+    .spot-pill {
+      font-variant-numeric: tabular-nums;
+      font-weight: 700; font-size: 1.05rem;
+      padding: 4px 12px; border-radius: 8px;
+      background: #0e1520; border: 1px solid var(--line);
+    }
+    label.field {
+      display: flex; flex-direction: column; gap: 3px;
+      font-size: 0.68rem; color: var(--muted); text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    input, select {
+      background: #0e1520; color: var(--text); border: 1px solid var(--line);
+      border-radius: 8px; padding: 7px 10px; font-size: 0.88rem; min-width: 7.2rem;
+    }
+    input[type="number"] { width: 5.5rem; }
+    button {
+      background: #1c2736; color: var(--text); border: 1px solid var(--line);
+      border-radius: 8px; padding: 8px 14px; font-size: 0.88rem; cursor: pointer;
+      align-self: flex-end;
+    }
+    button:hover { border-color: var(--accent); }
+    button.primary { background: #1a2a40; border-color: var(--accent); }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .filters {
+      display: flex; flex-wrap: wrap; gap: 10px 12px; align-items: flex-end;
+      padding: 10px 14px; border-bottom: 1px solid var(--line); background: #0e1520;
+    }
+    .snap-nav {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel);
+      font-size: 0.82rem; font-variant-numeric: tabular-nums;
+    }
+    .snap-nav .pos { min-width: 7.5rem; text-align: center; color: var(--muted); }
+    .snap-nav .pos b { color: var(--text); }
+    .snap-nav .page-meta { color: var(--muted); margin-left: 4px; }
+    .statbar {
+      display: flex; flex-wrap: wrap; gap: 14px; padding: 8px 14px;
+      border-bottom: 1px solid var(--line); font-size: 0.82rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .statbar b { color: var(--accent); font-weight: 650; }
+    .week-tabs {
+      display: flex; gap: 6px; padding: 8px 14px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .week-tabs button {
+      align-self: auto; border-radius: 8px 8px 0 0; border-bottom: none;
+      opacity: 0.7;
+    }
+    .week-tabs button.active {
+      opacity: 1; background: #1a2a40; border-color: var(--accent);
+      color: var(--text);
+    }
+    main { flex: 1; overflow: auto; padding: 0 0 24px; }
+    table.chain {
+      width: 100%; border-collapse: collapse; font-size: 0.8rem;
+      font-variant-numeric: tabular-nums;
+      min-width: 920px;
+    }
+    .chain th, .chain td {
+      padding: 6px 8px; border-bottom: 1px solid var(--line);
+      text-align: right; white-space: nowrap;
+    }
+    .chain th {
+      position: sticky; top: 0; z-index: 3;
+      background: #101826; color: var(--muted); font-weight: 600;
+    }
+    .chain thead tr.group th {
+      top: 0; text-align: center; letter-spacing: 0.06em;
+      font-size: 0.72rem; text-transform: uppercase;
+      padding-top: 8px; padding-bottom: 4px;
+    }
+    .chain thead tr.group th.calls { color: #f5a8a4; background: #1a1214; }
+    .chain thead tr.group th.puts { color: #8fd4cb; background: #101a18; }
+    .chain thead tr.group th.strike-h { background: #141820; color: var(--atm); }
+    .chain thead tr.cols th { top: 28px; }
+    .chain th.c, .chain td.c { text-align: center; }
+    .chain td.strike {
+      text-align: center; font-weight: 700; background: #0e1520;
+      border-left: 1px solid var(--line); border-right: 1px solid var(--line);
+      min-width: 5.5rem;
+    }
+    .chain tr.atm td { background: var(--atm-row); }
+    .chain tr.atm td.strike { color: var(--atm); background: #241c08; }
+    .chain tr.itm-ce td.ce-cell { background: var(--itm-ce); }
+    .chain tr.itm-pe td.pe-cell { background: var(--itm-pe); }
+    .chain td.ltp { font-weight: 650; }
+    .chain td.ce-ltp { color: #f5a8a4; }
+    .chain td.pe-ltp { color: #8fd4cb; }
+    .empty { padding: 48px 16px; text-align: center; color: var(--muted); }
+    .oi-bar {
+      display: inline-block; height: 4px; border-radius: 2px;
+      vertical-align: middle; margin-right: 6px; max-width: 48px;
+    }
+    .oi-bar.ce { background: #ef5350; }
+    .oi-bar.pe { background: #26a69a; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>NIFTY option chain</h1>
+    <span class="spot-pill" id="spotPill">Spot —</span>
+    <span class="meta" id="hdrMeta">Zerodha-style · live capture DB</span>
+    <div class="grow"></div>
+    <button type="button" id="btnDash">Dashboard</button>
+    <button type="button" id="btnCapture">Capture</button>
+  </header>
+
+  <div class="filters">
+    <label class="field">Date
+      <select id="day"></select>
+    </label>
+    <label class="field">Time from
+      <input id="timeFrom" type="time" step="1" value="09:15:00" />
+    </label>
+    <label class="field">Time to
+      <input id="timeTo" type="time" step="1" value="15:30:00" />
+    </label>
+    <label class="field">Page size
+      <select id="pageSize">
+        <option value="50">50</option>
+        <option value="100" selected>100</option>
+        <option value="200">200</option>
+        <option value="500">500</option>
+      </select>
+    </label>
+    <label class="field">Range
+      <select id="moneyness">
+        <option value="wing" selected>ATM ± depth</option>
+        <option value="atm">ATM only</option>
+        <option value="itm">ITM</option>
+        <option value="otm">OTM</option>
+        <option value="all">All</option>
+      </select>
+    </label>
+    <label class="field">Depth
+      <select id="depth">
+        <option value="5">5</option>
+        <option value="10" selected>10</option>
+      </select>
+    </label>
+    <label class="field">LTP min
+      <input id="ltpMin" type="number" step="0.05" placeholder="—" />
+    </label>
+    <label class="field">LTP max
+      <input id="ltpMax" type="number" step="0.05" placeholder="—" />
+    </label>
+    <button type="button" class="primary" id="btnLoad">Apply filters</button>
+  </div>
+
+  <div class="snap-nav" id="snapNav">
+    <button type="button" id="btnPagePrev" title="Previous page of snapshots">« Page</button>
+    <button type="button" id="btnPrev" title="Previous snapshot">◀ Back</button>
+    <span class="pos" id="snapPos">— / —</span>
+    <button type="button" id="btnNext" title="Next snapshot">Next ▶</button>
+    <button type="button" id="btnPageNext" title="Next page of snapshots">Page »</button>
+    <label class="field" style="margin-left:8px">Snapshot
+      <select id="tsPick"><option value="">—</option></select>
+    </label>
+    <span class="page-meta" id="pageMeta"></span>
+  </div>
+
+  <div class="week-tabs" id="weekTabs">
+    <button type="button" class="active" data-week="current">Current week</button>
+    <button type="button" data-week="next">Next week</button>
+  </div>
+
+  <div class="statbar" id="statbar">
+    <span>Loading…</span>
+  </div>
+
+  <main>
+    <table class="chain">
+      <thead>
+        <tr class="group">
+          <th class="calls" colspan="3">Calls</th>
+          <th class="strike-h" rowspan="2">Strike</th>
+          <th class="puts" colspan="3">Puts</th>
+        </tr>
+        <tr class="cols">
+          <th>OI</th>
+          <th>Volume</th>
+          <th>LTP</th>
+          <th>LTP</th>
+          <th>Volume</th>
+          <th>OI</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr><td colspan="7" class="empty">No data yet</td></tr>
+      </tbody>
+    </table>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let activeWeek = "current";
+    let lastSnap = null;
+    let liveTimer = null;
+    /** Current page of filtered snapshots */
+    let timesPage = [];
+    let timesTotal = 0;
+    let timesOffset = 0;
+    let timesLimit = 100;
+    let timesPages = 1;
+    let timesPageNum = 1;
+    /** Absolute index in filtered set (0-based); -1 = live/latest mode */
+    let snapAbsIndex = -1;
+    let browsingHistory = false;
+
+    function todayIST() {
+      return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).format(new Date());
+    }
+
+    function useLiveSync() {
+      return (
+        !browsingHistory &&
+        $("day").value === todayIST() &&
+        snapAbsIndex < 0
+      );
+    }
+
+    function scheduleLive() {
+      if (liveTimer) clearInterval(liveTimer);
+      liveTimer = null;
+      if (useLiveSync()) {
+        liveTimer = setInterval(() => apply({ silent: true }), 1000);
+        $("hdrMeta").textContent = "LIVE sync 1s · DB save 10s";
+      } else {
+        $("hdrMeta").textContent = "historical snapshot · filtered pager";
+      }
+    }
+
+    function filterParams() {
+      return {
+        week: "both",
+        side: "both",
+        moneyness: $("moneyness").value,
+        depth: $("depth").value,
+        ltp_min: $("ltpMin").value,
+        ltp_max: $("ltpMax").value,
+      };
+    }
+
+    function qs(params) {
+      const u = new URLSearchParams();
+      Object.entries(params).forEach(([k, v]) => {
+        if (v === undefined || v === null || v === "") return;
+        u.set(k, String(v));
+      });
+      return u.toString();
+    }
+
+    function fmt(n, d = 2) {
+      if (n == null || Number.isNaN(Number(n))) return "—";
+      return Number(n).toFixed(d);
+    }
+
+    function fmtInt(n) {
+      if (n == null || Number.isNaN(Number(n))) return "—";
+      return Number(n).toLocaleString("en-IN");
+    }
+
+    function oiBar(oi, maxOi, side) {
+      if (oi == null || !maxOi) return "";
+      const w = Math.max(2, Math.round((Number(oi) / maxOi) * 48));
+      return `<span class="oi-bar ${side}" style="width:${w}px"></span>`;
+    }
+
+    function updateNavUi() {
+      const total = timesTotal;
+      const has = total > 0;
+      const idx = snapAbsIndex;
+      const label =
+        has && idx >= 0
+          ? `<b>${idx + 1}</b> / ${total}`
+          : has
+            ? `— / ${total}`
+            : "— / —";
+      $("snapPos").innerHTML = label;
+      $("pageMeta").textContent = has
+        ? `page ${timesPageNum}/${timesPages}` +
+          (timesPage.length
+            ? ` · showing ${timesOffset + 1}–${timesOffset + timesPage.length}`
+            : "")
+        : "no snapshots for filters";
+      $("btnPrev").disabled = !has || idx <= 0;
+      $("btnNext").disabled = !has || idx < 0 || idx >= total - 1;
+      $("btnPagePrev").disabled = !has || timesPageNum <= 1;
+      $("btnPageNext").disabled = !has || timesPageNum >= timesPages;
+    }
+
+    function fillTsPick() {
+      const sel = $("tsPick");
+      const cur = sel.value;
+      sel.innerHTML = "";
+      if (!timesPage.length) {
+        sel.innerHTML = `<option value="">No snapshots</option>`;
+        updateNavUi();
+        return;
+      }
+      timesPage.forEach((t) => {
+        const o = document.createElement("option");
+        o.value = t.ts;
+        const n = (t.index != null ? t.index : 0) + 1;
+        o.textContent = `#${n} · ${t.time} · ${t.spot ?? "—"} · ATM ${t.atm ?? "—"}`;
+        sel.appendChild(o);
+      });
+      if (cur && [...sel.options].some((o) => o.value === cur)) {
+        sel.value = cur;
+      } else if (snapAbsIndex >= 0) {
+        const hit = timesPage.find((t) => t.index === snapAbsIndex);
+        if (hit) sel.value = hit.ts;
+        else sel.selectedIndex = 0;
+      } else {
+        sel.selectedIndex = sel.options.length - 1; // latest on page
+      }
+      updateNavUi();
+    }
+
+    async function loadDays() {
+      const res = await fetch("/api/option_chain_db/days");
+      const data = await res.json();
+      const sel = $("day");
+      sel.innerHTML = "";
+      const days = data.days || [];
+      if (!days.length) {
+        sel.innerHTML = `<option value="">No captured days</option>`;
+        $("hdrMeta").textContent = data.error || "DB empty — enable Chain capture on dashboard";
+        $("tbody").innerHTML = `<tr><td colspan="7" class="empty">No captured days yet</td></tr>`;
+        return;
+      }
+      days.forEach((d) => {
+        const o = document.createElement("option");
+        o.value = d;
+        o.textContent = d;
+        sel.appendChild(o);
+      });
+      sel.value = days[0];
+      await loadTimes({ goLatest: true });
+      await apply();
+    }
+
+    async function loadTimes({
+      offset = null,
+      goLatest = false,
+      keepIndex = false,
+    } = {}) {
+      const day = $("day").value;
+      if (!day) return;
+      timesLimit = Number($("pageSize").value) || 100;
+      const off = offset != null ? offset : timesOffset;
+      const filters = filterParams();
+      // Paginate snapshot list with the same filters used for the chain view
+      const q = qs({
+        day,
+        time_from: $("timeFrom").value,
+        time_to: $("timeTo").value,
+        offset: off,
+        limit: timesLimit,
+        ...filters,
+      });
+      const res = await fetch(`/api/option_chain_db/times?${q}`);
+      const data = await res.json();
+      if (data.error && !(data.times || []).length) {
+        timesPage = [];
+        timesTotal = 0;
+        timesOffset = 0;
+        timesPages = 1;
+        timesPageNum = 1;
+        snapAbsIndex = -1;
+        fillTsPick();
+        return;
+      }
+      timesPage = data.times || [];
+      timesTotal = Number(data.total || 0);
+      timesOffset = Number(data.offset || 0);
+      timesLimit = Number(data.limit || timesLimit);
+      timesPages = Number(data.pages || 1);
+      timesPageNum = Number(data.page || 1);
+
+      if (!timesTotal) {
+        snapAbsIndex = -1;
+        browsingHistory = false;
+        fillTsPick();
+        return;
+      }
+
+      if (goLatest) {
+        // Jump to last page of filtered set; stay LIVE on today until user pages
+        const lastOff = Math.max(0, (timesPages - 1) * timesLimit);
+        if (timesOffset !== lastOff) {
+          await loadTimes({ offset: lastOff, goLatest: true, keepIndex: false });
+          return;
+        }
+        if ($("day").value === todayIST()) {
+          snapAbsIndex = -1;
+          browsingHistory = false;
+        } else {
+          snapAbsIndex = timesTotal - 1;
+          browsingHistory = true;
+        }
+      } else if (!keepIndex) {
+        if (snapAbsIndex < 0 || snapAbsIndex >= timesTotal) {
+          snapAbsIndex = timesOffset + Math.max(0, timesPage.length - 1);
+        }
+        // If current index not on this page, clamp to page
+        const first = timesOffset;
+        const last = timesOffset + timesPage.length - 1;
+        if (snapAbsIndex < first || snapAbsIndex > last) {
+          snapAbsIndex = first;
+        }
+      }
+      fillTsPick();
+    }
+
+    async function ensureIndexLoaded(absIndex) {
+      if (absIndex < 0 || absIndex >= timesTotal) return false;
+      const pageStart = Math.floor(absIndex / timesLimit) * timesLimit;
+      if (pageStart !== timesOffset || !timesPage.length) {
+        await loadTimes({ offset: pageStart, keepIndex: true });
+      }
+      snapAbsIndex = absIndex;
+      browsingHistory = true;
+      fillTsPick();
+      return true;
+    }
+
+    async function goSnap(delta) {
+      if (timesTotal <= 0) return;
+      let next = snapAbsIndex;
+      if (next < 0) next = timesTotal - 1;
+      next = Math.max(0, Math.min(timesTotal - 1, next + delta));
+      if (!(await ensureIndexLoaded(next))) return;
+      scheduleLive();
+      await apply();
+    }
+
+    async function goPage(delta) {
+      if (timesTotal <= 0) return;
+      const nextPage = Math.max(1, Math.min(timesPages, timesPageNum + delta));
+      if (nextPage === timesPageNum) return;
+      const off = (nextPage - 1) * timesLimit;
+      await loadTimes({ offset: off, keepIndex: false });
+      snapAbsIndex = timesOffset;
+      browsingHistory = true;
+      scheduleLive();
+      await apply();
+    }
+
+    function buildRows(data) {
+      const legs = (data.legs || []).filter((L) => L.week === activeWeek);
+      const byStrike = new Map();
+      for (const L of legs) {
+        const k = Number(L.strike);
+        if (!byStrike.has(k)) byStrike.set(k, { strike: k, ce: null, pe: null });
+        if (L.side === "CE") byStrike.get(k).ce = L;
+        if (L.side === "PE") byStrike.get(k).pe = L;
+      }
+      const rows = [...byStrike.values()].sort((a, b) => a.strike - b.strike);
+      // LTP filter: keep strike if either side in range (API already filtered legs)
+      return rows;
+    }
+
+    function renderChain(data) {
+      lastSnap = data;
+      const spot = data.spot != null ? Number(data.spot) : null;
+      const atm = data.atm != null ? Number(data.atm) : null;
+      $("spotPill").textContent =
+        spot != null
+          ? `Spot ${spot.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          : "Spot —";
+
+      const exp =
+        activeWeek === "next"
+          ? data.next_expiry || "—"
+          : data.current_expiry || "—";
+      const src =
+        data.source === "live_sync"
+          ? data.persisted
+            ? "LIVE+save"
+            : "LIVE 1s"
+          : "DB";
+      $("statbar").innerHTML = `
+        <span>Time <b>${data.time || "—"}</b></span>
+        <span>ATM <b>${atm ?? "—"}</b></span>
+        <span>Expiry <b>${exp}</b></span>
+        <span>Week <b>${activeWeek}</b></span>
+        <span>Feed <b>${src}</b></span>
+      `;
+
+      const rows = buildRows(data);
+      if (!rows.length) {
+        $("tbody").innerHTML = `<tr><td colspan="7" class="empty">No strikes for ${activeWeek} week with these filters</td></tr>`;
+        return;
+      }
+
+      let maxCeOi = 1;
+      let maxPeOi = 1;
+      rows.forEach((r) => {
+        if (r.ce?.oi != null) maxCeOi = Math.max(maxCeOi, Number(r.ce.oi));
+        if (r.pe?.oi != null) maxPeOi = Math.max(maxPeOi, Number(r.pe.oi));
+      });
+
+      $("tbody").innerHTML = rows
+        .map((r) => {
+          const ce = r.ce || {};
+          const pe = r.pe || {};
+          const isAtm = atm != null && r.strike === atm;
+          const ceItm = spot != null && r.strike < spot;
+          const peItm = spot != null && r.strike > spot;
+          const cls = [
+            isAtm ? "atm" : "",
+            ceItm ? "itm-ce" : "",
+            peItm ? "itm-pe" : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
+          return `<tr class="${cls}">
+            <td class="ce-cell">${oiBar(ce.oi, maxCeOi, "ce")}${fmtInt(ce.oi)}</td>
+            <td class="ce-cell">${fmtInt(ce.volume)}</td>
+            <td class="ce-cell ltp ce-ltp">${fmt(ce.ltp)}</td>
+            <td class="strike c">${r.strike}</td>
+            <td class="pe-cell ltp pe-ltp">${fmt(pe.ltp)}</td>
+            <td class="pe-cell">${fmtInt(pe.volume)}</td>
+            <td class="pe-cell">${oiBar(pe.oi, maxPeOi, "pe")}${fmtInt(pe.oi)}</td>
+          </tr>`;
+        })
+        .join("");
+    }
+
+    function currentTs() {
+      if (snapAbsIndex < 0 || !timesPage.length) return $("tsPick").value || "";
+      const hit = timesPage.find((t) => t.index === snapAbsIndex);
+      if (hit) return hit.ts;
+      return $("tsPick").value || "";
+    }
+
+    async function apply({ silent = false } = {}) {
+      const day = $("day").value;
+      if (!day) {
+        $("tbody").innerHTML = `<tr><td colspan="7" class="empty">No captured days in DB</td></tr>`;
+        return;
+      }
+      const filters = filterParams();
+      if (!silent) $("statbar").innerHTML = `<span class="meta">Loading…</span>`;
+      let data;
+      if (useLiveSync()) {
+        const res = await fetch(`/api/option_chain_db/live?${qs(filters)}`);
+        data = await res.json();
+        // Fallback to last DB tick if live not ready yet
+        if (data.error && !(data.legs || []).length) {
+          const q = qs({
+            day,
+            ...filters,
+            time_from: $("timeFrom").value,
+            time_to: $("timeTo").value,
+          });
+          data = await (await fetch(`/api/option_chain_db/query?${q}`)).json();
+        }
+      } else {
+        const ts = currentTs();
+        const q = qs({
+          day,
+          ts: ts || undefined,
+          time_from: $("timeFrom").value,
+          time_to: $("timeTo").value,
+          ...filters,
+        });
+        data = await (await fetch(`/api/option_chain_db/query?${q}`)).json();
+      }
+      if (data.error && !(data.legs || []).length) {
+        if (!silent) {
+          $("statbar").textContent = data.error;
+          $("tbody").innerHTML = `<tr><td colspan="7" class="empty">${data.error}</td></tr>`;
+        }
+        updateNavUi();
+        return;
+      }
+      // Sync picker to loaded ts when browsing
+      if (data.ts && browsingHistory) {
+        const onPage = timesPage.find((t) => t.ts === data.ts);
+        if (onPage && onPage.index != null) snapAbsIndex = onPage.index;
+        if ([...$("tsPick").options].some((o) => o.value === data.ts)) {
+          $("tsPick").value = data.ts;
+        }
+      }
+      const hasCur = (data.legs || []).some((L) => L.week === "current");
+      const hasNext = (data.legs || []).some((L) => L.week === "next");
+      if (activeWeek === "current" && !hasCur && hasNext) activeWeek = "next";
+      if (activeWeek === "next" && !hasNext && hasCur) activeWeek = "current";
+      document.querySelectorAll("#weekTabs button").forEach((b) => {
+        b.classList.toggle("active", b.dataset.week === activeWeek);
+      });
+      renderChain(data);
+      updateNavUi();
+    }
+
+    $("btnLoad").onclick = async () => {
+      timesOffset = 0;
+      snapAbsIndex = -1;
+      browsingHistory = $("day").value !== todayIST();
+      await loadTimes({ offset: 0, goLatest: true });
+      scheduleLive();
+      await apply();
+    };
+    $("day").onchange = async () => {
+      timesOffset = 0;
+      snapAbsIndex = -1;
+      browsingHistory = $("day").value !== todayIST();
+      await loadTimes({ offset: 0, goLatest: true });
+      scheduleLive();
+      await apply();
+    };
+    $("timeFrom").onchange = async () => {
+      await loadTimes({ offset: 0, goLatest: true });
+    };
+    $("timeTo").onchange = async () => {
+      await loadTimes({ offset: 0, goLatest: true });
+    };
+    $("pageSize").onchange = async () => {
+      const keep = snapAbsIndex;
+      timesLimit = Number($("pageSize").value) || 100;
+      const off =
+        keep >= 0 ? Math.floor(keep / timesLimit) * timesLimit : timesOffset;
+      await loadTimes({ offset: off, keepIndex: true });
+      if (keep >= 0) snapAbsIndex = keep;
+      fillTsPick();
+      scheduleLive();
+      await apply();
+    };
+    $("btnPrev").onclick = () => goSnap(-1);
+    $("btnNext").onclick = () => goSnap(1);
+    $("btnPagePrev").onclick = () => goPage(-1);
+    $("btnPageNext").onclick = () => goPage(1);
+    $("tsPick").onchange = async () => {
+      const ts = $("tsPick").value;
+      const hit = timesPage.find((t) => t.ts === ts);
+      if (hit && hit.index != null) snapAbsIndex = hit.index;
+      browsingHistory = true;
+      scheduleLive();
+      await apply();
+    };
+    document.addEventListener("keydown", (e) => {
+      if (e.target && ["INPUT", "SELECT", "TEXTAREA"].includes(e.target.tagName)) {
+        return;
+      }
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        goSnap(-1);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        goSnap(1);
+      }
+    });
+    document.querySelectorAll("#weekTabs button").forEach((btn) => {
+      btn.onclick = () => {
+        activeWeek = btn.dataset.week;
+        document.querySelectorAll("#weekTabs button").forEach((b) => {
+          b.classList.toggle("active", b === btn);
+        });
+        if (lastSnap) renderChain(lastSnap);
+        else apply();
+      };
+    });
+    $("btnDash").onclick = () => window.open("/", "_blank", "noopener,noreferrer");
+    $("btnCapture").onclick = async () => {
+      const s = await (await fetch("/api/option_chain_db")).json();
+      alert(
+        `Capture: ${s.capturing ? "ON" : "OFF"}\n` +
+          `Idle: ${s.idle || "—"}\n` +
+          `Last LTP: ${s.last_ltp_ts || "—"}\n` +
+          `Ticks: ${(s.db_stats && s.db_stats.ltp_ticks) || 0}`
+      );
+    };
+
+    loadDays()
+      .then(() => scheduleLive())
+      .catch((e) => {
+        $("statbar").textContent = String(e);
+      });
+  </script>
+</body>
+</html>

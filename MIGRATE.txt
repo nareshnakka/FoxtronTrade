@@ -1,0 +1,48 @@
+FoxtronTrade — migrate to a new laptop
+======================================
+
+1) On the NEW laptop, extract this zip anywhere
+   (example: D:\FoxtronTrade or C:\Users\You\FoxtronTrade)
+
+2) Double-click  FoxtronTrade.bat
+   - First run: installs Python deps into .venv (needs internet)
+   - If Python is missing, it tries winget install Python 3.12
+   - Then starts 24×7 unattended mode
+   - Dashboard: http://127.0.0.1:5050
+
+3) Double-click  FoxtronTrade.bat  again to STOP
+
+What is included
+----------------
+- Full app code
+- data\ (option chain captures, trades, learning, etc.)
+- data\option_chain_live\chain.db  ← full live options history (auto-verified on first start)
+- data\option_chain_1m\            ← exported 1m day folders
+- .env (Kite API + TOTP auto-login credentials)
+- config.json, access_token.json (if present)
+
+Auto-restore on new laptop
+--------------------------
+FoxtronTrade.bat runs tools_migrate_restore.py once after extract:
+  - checks chain.db integrity
+  - flushes WAL into the main DB
+  - prints day / tick counts
+No manual import step — the DB path is already wired in config.
+
+What is NOT included (rebuilt automatically)
+--------------------------------------------
+- .venv  (recreated on first start)
+- .git / __pycache__
+
+New laptop checklist
+--------------------
+- Keep laptop plugged in
+- Windows Sleep = Never (while plugged in)
+- Leave FoxtronTrade.bat window open for 24×7
+- Firewall: allow Python on private network if prompted
+- Zerodha redirect URL still: http://127.0.0.1:5000/callback
+  (local forwarder bridges to dashboard :5050)
+
+Optional checks after first start
+---------------------------------
+  .venv\Scripts\python.exe tools_check_unattended.py

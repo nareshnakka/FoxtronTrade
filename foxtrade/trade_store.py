@@ -150,8 +150,9 @@ def record_live_attempt(
 
 
 def is_pnl_trade(t: dict[str, Any]) -> bool:
-    """True for normal paper/live fills (excludes live-attempt audit rows)."""
-    return str(t.get("ledger_kind") or "") != "live_attempt"
+    """True for normal paper/live fills (excludes live-attempt / session-reset rows)."""
+    kind = str(t.get("ledger_kind") or "")
+    return kind not in ("live_attempt", "session_reset")
 
 
 def update_trade(trade_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
@@ -247,6 +248,8 @@ def count_day_setups(algo: str | None, mode: str) -> int:
     setups: set[str] = set()
     orphan = 0
     for t in list_trades():
+        if not is_pnl_trade(t):  # live-attempt audit rows must not eat daily caps
+            continue
         if t.get("mode") != mode:
             continue
         if algo is not None and t.get("algo") != algo:
@@ -272,6 +275,8 @@ def day_pnl_stats(algo: str, mode: str) -> dict[str, Any]:
     last_loss_side: str | None = None
     last_loss_at = ""
     for t in list_trades():
+        if not is_pnl_trade(t):
+            continue
         if t.get("algo") != algo or t.get("mode") != mode:
             continue
         if t.get("status") != "CLOSED":
@@ -700,15 +705,18 @@ def report_filtered(
     mode: str = "combined",
     date_from: str | None = None,
     date_to: str | None = None,
+    algo: str | None = None,
 ) -> dict[str, Any]:
     """
     Custom duration report for paper / live / combined.
     date_from / date_to: YYYY-MM-DD inclusive (closed_at for closed, opened_at for open).
+    algo: optional filter (algo1 / algo2 / algo2nw / …); empty = all.
     """
     base = report_details()
     mode = (mode or "combined").lower()
     if mode not in ("combined", "paper", "live"):
         mode = "combined"
+    algo_f = (algo or "").strip().lower() or None
 
     def _in_range(t: dict[str, Any], *, open_leg: bool) -> bool:
         raw = t.get("opened_at") if open_leg else t.get("closed_at")
@@ -727,17 +735,22 @@ def report_filtered(
             return m == "live"
         return True
 
+    def _algo_ok(t: dict[str, Any]) -> bool:
+        if not algo_f or algo_f in ("all", "combined"):
+            return True
+        return str(t.get("algo") or "").lower() == algo_f
+
     closed = [
         t
         for t in (base.get("periods") or {}).get("all", {}).get("trades") or []
-        if _mode_ok(t) and _in_range(t, open_leg=False)
+        if _mode_ok(t) and _algo_ok(t) and _in_range(t, open_leg=False)
     ]
     # Recompute stats via report_details helpers by building a mini block
     # Use same invested/lots fields as stats() — call report_details periods path lightly
     opens = [
         t
         for t in (base.get("open_trades") or [])
-        if _mode_ok(t) and _in_range(t, open_leg=True)
+        if _mode_ok(t) and _algo_ok(t) and _in_range(t, open_leg=True)
     ]
 
     # Inline stats (mirror report_details.stats)
@@ -799,7 +812,9 @@ def report_filtered(
             "algo1": _algo_slice("algo1"),
             "algo1_sx": _algo_slice("algo1_sx"),
             "algo2": _algo_slice("algo2"),
+            "algo2nw": _algo_slice("algo2nw"),
         },
+        "algo": algo_f or "all",
         "daily_series": [{"date": k, "pnl": by_day[k]} for k in sorted(by_day.keys())],
         "trades": sorted(closed, key=lambda x: str(x.get("closed_at") or ""), reverse=True),
         "open_trades": opens,

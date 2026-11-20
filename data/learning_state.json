@@ -1,8 +1,8 @@
 {
-  "updated_at": "2026-11-03T16:32:40.376252+05:30",
-  "last_daily_learn": "2026-11-03",
+  "updated_at": "2026-11-20T12:00:25.173344+05:30",
+  "last_daily_learn": "2026-11-20",
   "prior_pe": 0.45,
-  "algo1_min_confidence": 0.58,
+  "algo1_min_confidence": 0.65,
   "signal_weights": {
     "bearish_candle": 1.0,
     "bullish_candle": 1.0,
@@ -12,20 +12,30 @@
     "ema_bull": 1.0,
     "near_resistance": 1.0,
     "near_support": 1.0,
-    "macro_risk_off": 0.84,
+    "macro_risk_off": 0.5,
     "macro_risk_on": 1.0,
     "pe_firming": 1.0,
     "ce_firming": 1.0,
     "ce_trap_filter": 1.0,
     "or_fade_high": 1.0,
     "or_expect_recover": 1.0,
-    "or_breakdown": 1.0
+    "or_breakdown": 1.0,
+    "post_decay": 0.5,
+    "OPP_PE_BREAK_DOWN": 1.5,
+    "OPP_CE_BREAK_DOWN": 0.5,
+    "EDGE_BOTTOM": 0.5,
+    "EDGE": 0.5,
+    "DESC": 0.5,
+    "atm_channel": 0.6,
+    "convergence": 0.52,
+    "CE": 0.52,
+    "breakout_only": 0.52
   },
   "stats": {
     "paper": {
-      "right": 0,
-      "wrong": 0,
-      "pnl": 0.0
+      "right": 23,
+      "wrong": 37,
+      "pnl": -23107.5
     },
     "live": {
       "right": 0,
@@ -34,10 +44,6 @@
     }
   },
   "notes": [
-    "2026-10-26: need more samples",
-    "2026-10-27: WR 50% samples 14; prior_pe 0.65 \u2192 0.52 (PE WR 30% / CE WR 100%); weight ema_bear 1.00 \u2192 0.92 (tag WR 0%)",
-    "2026-10-28: WR 48% samples 21; prior_pe 0.52 \u2192 0.48 (PE WR 40% / CE WR 67%); weight ema_bear 0.92 \u2192 0.84 (tag WR 0%)",
-    "2026-10-29: WR 50% samples 22; prior_pe 0.48 \u2192 0.45 (PE WR 40% / CE WR 71%); weight ema_bear 0.84 \u2192 0.76 (tag WR 0%)",
     "2026-10-30: WR 50% samples 22; weight ema_bear 0.76 \u2192 0.68 (tag WR 0%)",
     "2026-10-31: WR 46% samples 24; weight ema_bear 0.68 \u2192 0.60 (tag WR 0%)",
     "2026-11-01: WR 46% samples 24; weight ema_bear 0.60 \u2192 0.52 (tag WR 0%)",
@@ -45,7 +51,30 @@
     "2026-11-02: UP-day PE post-decay \u2192 spot_align + day-extent rule (block PE while still above open after UP swing)",
     "2026-11-02 S/R learn: block ORB chase/failed-break; prefer CE on UP-range dip-reclaim \u2192 +9.6%",
     "2026-11-03: WR 41% samples 27; min_confidence 0.55 \u2192 0.58 (WR 41% weak); weight macro_risk_off 0.92 \u2192 0.84 (tag WR 39%)",
-    "2026-10-26: weak-est (+75%) CE post-decay partial reclaim (-14 vs open) stabbed -35k in 1m. Block shallow under-open reclaim when est<200; weak-est confirm 5m; true spot OHLC for decay."
+    "2026-10-26: weak-est (+75%) CE post-decay partial reclaim (-14 vs open) stabbed -35k in 1m. Block shallow under-open reclaim when est<200; weak-est confirm 5m; true spot OHLC for decay.",
+    "2026-11-04: WR 39% samples 28; min_confidence 0.58 \u2192 0.61 (WR 39% weak); weight post_decay 1.00 \u2192 0.92 (tag WR 0%); weight macro_risk_off 0.84 \u2192 0.76 (tag WR 39%)",
+    "2026-11-05: WR 41% samples 59; min_confidence 0.61 \u2192 0.64 (WR 41% weak); weight post_decay 0.92 \u2192 0.84 (tag WR 0%); weight macro_risk_off 0.76 \u2192 0.68 (tag WR 39%); weight OPP_PE_BREAK_DOWN 1.00 \u2192 1.08 (tag WR 75%); weight OPP_CE_BREAK_DOWN 1.00 \u2192 0.92 (tag WR 0%)",
+    "2026-11-06: WR 42% samples 60; min_confidence 0.64 \u2192 0.65 (WR 42% weak); weight macro_risk_off 0.68 \u2192 0.60 (tag WR 39%); weight OPP_CE_BREAK_DOWN 0.92 \u2192 0.84 (tag WR 0%); weight post_decay 0.84 \u2192 0.76 (tag WR 0%); weight OPP_PE_BREAK_DOWN 1.08 \u2192 1.16 (tag WR 75%)",
+    "2026-11-07: WR 39% samples 71; min_confidence 0.65 \u2192 0.65 (WR 39% weak); weight EDGE_BOTTOM 1.00 \u2192 0.92 (tag WR 38%); weight macro_risk_off 0.60 \u2192 0.52 (tag WR 39%); weight OPP_CE_BREAK_DOWN 0.84 \u2192 0.76 (tag WR 0%); weight OPP_PE_BREAK_DOWN 1.16 \u2192 1.24 (tag WR 83%); weight EDGE 1.00 \u2192 0.92 (tag WR 38%); weight post_decay 0.76 \u2192 0.68 (tag WR 0%); weight DESC 1.00 \u2192 0.92 (tag WR 17%)",
+    "2026-11-08: side pace \u2014 CE grind slow (hold 8m / loss 12pt / trail 5.5% / persist 3m); PE dump fast (hold 3m / loss 8pt / trail 3.0% / persist 1m)",
+    "2026-11-08: WR 39% samples 71; min_confidence 0.65 \u2192 0.65 (WR 39% weak); weight macro_risk_off 0.52 \u2192 0.50 (tag WR 39%); weight EDGE_BOTTOM 0.92 \u2192 0.84 (tag WR 38%); weight post_decay 0.68 \u2192 0.60 (tag WR 0%); weight OPP_CE_BREAK_DOWN 0.76 \u2192 0.68 (tag WR 0%); weight DESC 0.92 \u2192 0.84 (tag WR 17%); weight EDGE 0.92 \u2192 0.84 (tag WR 38%); weight OPP_PE_BREAK_DOWN 1.24 \u2192 1.32 (tag WR 83%)",
+    "2026-11-09: WR 38% samples 85; min_confidence 0.65 \u2192 0.65 (WR 38% weak); weight OPP_CE_BREAK_DOWN 0.68 \u2192 0.60 (tag WR 0%); weight atm_channel 1.00 \u2192 0.92 (tag WR 39%); weight EDGE_BOTTOM 0.84 \u2192 0.76 (tag WR 34%); weight DESC 0.84 \u2192 0.76 (tag WR 14%); weight OPP_PE_BREAK_DOWN 1.32 \u2192 1.40 (tag WR 83%); weight post_decay 0.60 \u2192 0.52 (tag WR 0%); weight EDGE 0.84 \u2192 0.76 (tag WR 34%)",
+    "2026-11-10: WR 38% samples 86; min_confidence 0.65 \u2192 0.65 (WR 38% weak); weight atm_channel 0.92 \u2192 0.84 (tag WR 39%); weight post_decay 0.52 \u2192 0.50 (tag WR 0%); weight OPP_CE_BREAK_DOWN 0.60 \u2192 0.52 (tag WR 0%); weight DESC 0.76 \u2192 0.68 (tag WR 14%); weight EDGE 0.76 \u2192 0.68 (tag WR 34%); weight EDGE_BOTTOM 0.76 \u2192 0.68 (tag WR 34%); weight OPP_PE_BREAK_DOWN 1.40 \u2192 1.48 (tag WR 83%)",
+    "2026-11-11: WR 38% samples 86; min_confidence 0.65 \u2192 0.65 (WR 38% weak); weight atm_channel 0.84 \u2192 0.76 (tag WR 39%); weight DESC 0.68 \u2192 0.60 (tag WR 14%); weight EDGE 0.68 \u2192 0.60 (tag WR 34%); weight OPP_CE_BREAK_DOWN 0.52 \u2192 0.50 (tag WR 0%); weight OPP_PE_BREAK_DOWN 1.48 \u2192 1.50 (tag WR 83%); weight EDGE_BOTTOM 0.68 \u2192 0.60 (tag WR 34%)",
+    "2026-11-12: WR 40% samples 91; min_confidence 0.65 \u2192 0.65 (WR 40% weak); weight atm_channel 0.76 \u2192 0.68 (tag WR 40%); weight DESC 0.60 \u2192 0.52 (tag WR 12%); weight EDGE 0.60 \u2192 0.52 (tag WR 36%); weight EDGE_BOTTOM 0.60 \u2192 0.52 (tag WR 36%)",
+    "2026-11-13: WR 40% samples 91; min_confidence 0.65 \u2192 0.65 (WR 40% weak); weight EDGE 0.52 \u2192 0.50 (tag WR 36%); weight DESC 0.52 \u2192 0.50 (tag WR 12%); weight EDGE_BOTTOM 0.52 \u2192 0.50 (tag WR 36%); weight atm_channel 0.68 \u2192 0.60 (tag WR 40%)",
+    "2026-11-14: WR 40% samples 96; min_confidence 0.65 \u2192 0.65 (WR 40% weak)",
+    "2026-11-15: WR 40% samples 96; min_confidence 0.65 \u2192 0.65 (WR 40% weak)",
+    "2026-11-15: WR 40% samples 96; min_confidence 0.65 \u2192 0.65 (WR 40% weak)",
+    "2026-11-16: WR 40% samples 98; min_confidence 0.65 \u2192 0.65 (WR 40% weak)",
+    "2026-11-16: WR 40% samples 98; min_confidence 0.65 \u2192 0.65 (WR 40% weak)",
+    "2026-11-16: WR 40% samples 99; min_confidence 0.65 \u2192 0.65 (WR 40% weak)",
+    "2026-11-17: WR 39% samples 102; min_confidence 0.65 \u2192 0.65 (WR 39% weak); weight convergence 1.00 \u2192 0.92 (tag WR 25%); weight CE 1.00 \u2192 0.92 (tag WR 33%); weight breakout_only 1.00 \u2192 0.92 (tag WR 25%)",
+    "2026-11-18: WR 39% samples 104; min_confidence 0.65 \u2192 0.65 (WR 39% weak); weight CE 0.92 \u2192 0.84 (tag WR 33%); weight breakout_only 0.92 \u2192 0.84 (tag WR 25%); weight convergence 0.92 \u2192 0.84 (tag WR 25%)",
+    "2026-11-18: WR 40% samples 112; min_confidence 0.65 \u2192 0.65 (WR 40% weak); weight breakout_only 0.84 \u2192 0.76 (tag WR 25%); weight convergence 0.84 \u2192 0.76 (tag WR 25%); weight CE 0.84 \u2192 0.76 (tag WR 33%)",
+    "2026-11-19: WR 40% samples 115; min_confidence 0.65 \u2192 0.65 (WR 40% weak); weight breakout_only 0.76 \u2192 0.68 (tag WR 25%); weight convergence 0.76 \u2192 0.68 (tag WR 25%); weight CE 0.76 \u2192 0.68 (tag WR 33%)",
+    "2026-11-19: WR 40% samples 116; min_confidence 0.65 \u2192 0.65 (WR 40% weak); weight breakout_only 0.68 \u2192 0.60 (tag WR 25%); weight convergence 0.68 \u2192 0.60 (tag WR 25%); weight CE 0.68 \u2192 0.60 (tag WR 33%)",
+    "2026-11-20: WR 40% samples 118; min_confidence 0.65 \u2192 0.65 (WR 40% weak); weight breakout_only 0.60 \u2192 0.52 (tag WR 25%); weight CE 0.60 \u2192 0.52 (tag WR 33%); weight convergence 0.60 \u2192 0.52 (tag WR 25%)"
   ],
   "rules": {
     "post_decay_spot_align": {
@@ -67,6 +96,23 @@
       "ce_max_under_open": 150.0,
       "learned_from": "2026-10-26",
       "rule": "WAIT CE post-decay if est<strong and 0>vs_open>-align (dead-cat); fix spot_open to session open"
+    },
+    "side_pace": {
+      "enabled": true,
+      "learned_from": "2026-11-08",
+      "rule": "CE markets grind slowly \u2014 longer hold, wider early-loss budget, looser trail, longer persist; PE dumps fast \u2014 shorter hold, tighter cut, tighter trail, faster confirm",
+      "ce_entry_min_hold_minutes": 8,
+      "pe_entry_min_hold_minutes": 3,
+      "ce_entry_min_hold_loss_points": 12,
+      "ce_entry_min_hold_loss_points_low_conf": 9,
+      "pe_entry_min_hold_loss_points": 8,
+      "pe_entry_min_hold_loss_points_low_conf": 6,
+      "ce_trail_giveback_pct": 5.5,
+      "pe_trail_giveback_pct": 3.0,
+      "ce_atm_trail_giveback_pct": 1.8,
+      "pe_atm_trail_giveback_pct": 0.9,
+      "ce_signal_persist_minutes": 3,
+      "pe_signal_persist_minutes": 1
     }
   }
 }

@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ATM CE / PE premiums — live</title>
+  <script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    :root {
+      --bg: #0b1017;
+      --panel: #141c27;
+      --line: #243041;
+      --text: #e8eef7;
+      --muted: #8fa0b8;
+      --accent: #3d9cf0;
+      --ce: #ef5350;
+      --pe: #26a69a;
+      --atm: #f0b429;
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center;
+      padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--line);
+      flex-shrink: 0;
+    }
+    h1 { font-size: 1.05rem; margin: 0; font-weight: 650; }
+    .meta { color: var(--muted); font-size: 0.78rem; }
+    .grow { flex: 1; }
+    .legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.8rem; }
+    .legend span::before {
+      content: ""; display: inline-block; width: 12px; height: 3px;
+      border-radius: 2px; margin-right: 6px; vertical-align: middle;
+    }
+    .lg-ce::before { background: var(--ce); }
+    .lg-pe::before { background: var(--pe); }
+    .lg-atm::before { background: var(--atm); }
+    .readout {
+      font-variant-numeric: tabular-nums; font-size: 0.85rem;
+      display: flex; gap: 14px; flex-wrap: wrap;
+    }
+    .readout .ce { color: var(--ce); font-weight: 600; }
+    .readout .pe { color: var(--pe); font-weight: 600; }
+    .readout .atm { color: var(--atm); font-weight: 600; }
+    label.field {
+      display: flex; flex-direction: column; gap: 2px;
+      font-size: 0.65rem; color: var(--muted); text-transform: uppercase;
+    }
+    select {
+      background: #0e1520; color: var(--text); border: 1px solid var(--line);
+      border-radius: 8px; padding: 6px 10px; font-size: 0.85rem;
+    }
+    main {
+      flex: 1; min-height: 0; display: flex; flex-direction: column;
+      padding: 10px 12px; gap: 10px;
+    }
+    .panel {
+      flex: 1; min-height: 280px; background: var(--panel);
+      border: 1px solid var(--line); border-radius: 8px;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .panel h2 {
+      margin: 0; padding: 6px 10px; font-size: 0.78rem; font-weight: 600;
+      color: var(--muted); border-bottom: 1px solid var(--line); flex-shrink: 0;
+    }
+    .chart { flex: 1; min-height: 240px; width: 100%; }
+    .status { padding: 24px; color: var(--muted); }
+    .err { color: var(--ce); }
+    footer {
+      flex-shrink: 0; padding: 6px 14px; border-top: 1px solid var(--line);
+      background: var(--panel); font-size: 0.72rem; color: var(--muted);
+      display: flex; gap: 16px; flex-wrap: wrap; align-items: center;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    button {
+      background: #1c2736; color: var(--text); border: 1px solid var(--line);
+      border-radius: 8px; padding: 6px 12px; font-size: 0.8rem; cursor: pointer;
+    }
+    button:hover { border-color: var(--accent); }
+    .live { color: #26a69a; font-weight: 650; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>ATM Call &amp; Put premiums</h1>
+    <label class="field">Day
+      <select id="day"></select>
+    </label>
+    <label class="field">Week
+      <select id="week">
+        <option value="current">Current</option>
+        <option value="next">Next</option>
+      </select>
+    </label>
+    <span class="meta" id="dayMeta">live capture DB</span>
+    <div class="grow"></div>
+    <div class="legend">
+      <span class="lg-ce">ATM CE</span>
+      <span class="lg-pe">ATM PE</span>
+      <span class="lg-atm">ATM strike (left)</span>
+    </div>
+    <div class="readout" id="readout">
+      <span class="meta">Hover chart…</span>
+    </div>
+    <button type="button" id="btnFit">Fit</button>
+    <button type="button" id="btnRefresh">Refresh</button>
+  </header>
+  <main>
+    <div class="status" id="status">Loading live ATM series…</div>
+    <section class="panel" id="premiumPanel" hidden>
+      <h2>Dynamic ATM CE / PE — from live chain capture (ATM recenters with spot)</h2>
+      <div class="chart" id="premiumChart"></div>
+    </section>
+  </main>
+  <footer>
+    <span id="footMeta"></span>
+    <span class="live" id="liveTag"></span>
+    <a href="/option-chain-filter">Chain filter</a>
+    <a href="/">Dashboard</a>
+  </footer>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const el = {
+      status: document.getElementById("status"),
+      panel: document.getElementById("premiumPanel"),
+      chart: document.getElementById("premiumChart"),
+      day: document.getElementById("day"),
+      week: document.getElementById("week"),
+      dayMeta: document.getElementById("dayMeta"),
+      footMeta: document.getElementById("footMeta"),
+      liveTag: document.getElementById("liveTag"),
+      readout: document.getElementById("readout"),
+      fit: document.getElementById("btnFit"),
+      refresh: document.getElementById("btnRefresh"),
+    };
+
+    let chart, ceSeries, peSeries, atmSeries;
+    let byTime = new Map();
+    let pollTimer = null;
+
+    function todayIST() {
+      const fmt = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      });
+      return fmt.format(new Date()); // YYYY-MM-DD
+    }
+
+    function tsUnix(ts) {
+      // Treat IST wall-clock as UTC so Lightweight Charts shows session hours
+      const m = String(ts || "").match(/(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+      if (!m) return null;
+      return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)) / 1000;
+    }
+
+    function fmt(n, d = 1) {
+      if (n == null || !Number.isFinite(Number(n))) return "—";
+      return Number(n).toLocaleString("en-IN", {
+        minimumFractionDigits: d,
+        maximumFractionDigits: d,
+      });
+    }
+
+    function ensureChart() {
+      if (chart) return;
+      chart = LightweightCharts.createChart(el.chart, {
+        layout: {
+          background: { color: "#141c27" },
+          textColor: "#8fa0b8",
+        },
+        grid: {
+          vertLines: { color: "#24304155" },
+          horzLines: { color: "#24304155" },
+        },
+        rightPriceScale: {
+          borderColor: "#243041",
+          scaleMargins: { top: 0.08, bottom: 0.08 },
+        },
+        leftPriceScale: {
+          visible: true,
+          borderColor: "#243041",
+          scaleMargins: { top: 0.15, bottom: 0.15 },
+        },
+        timeScale: {
+          borderColor: "#243041",
+          timeVisible: true,
+          secondsVisible: true,
+        },
+        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+        width: el.chart.clientWidth,
+        height: Math.max(el.chart.clientHeight, 320),
+      });
+      ceSeries = chart.addLineSeries({
+        color: "#ef5350",
+        lineWidth: 2,
+        title: "ATM CE",
+        priceScaleId: "right",
+        lastValueVisible: true,
+        priceLineVisible: false,
+      });
+      peSeries = chart.addLineSeries({
+        color: "#26a69a",
+        lineWidth: 2,
+        title: "ATM PE",
+        priceScaleId: "right",
+        lastValueVisible: true,
+        priceLineVisible: false,
+      });
+      atmSeries = chart.addLineSeries({
+        color: "#f0b429",
+        lineWidth: 1,
+        lineStyle: LightweightCharts.LineStyle.Dashed,
+        title: "ATM",
+        priceScaleId: "left",
+        lastValueVisible: true,
+        priceLineVisible: false,
+        lineType: LightweightCharts.LineType.WithSteps,
+      });
+      chart.subscribeCrosshairMove((param) => {
+        if (!param || param.time == null) {
+          el.readout.innerHTML = `<span class="meta">Hover chart…</span>`;
+          return;
+        }
+        const t = typeof param.time === "number" ? param.time : null;
+        if (t == null || !byTime.has(t)) return;
+        const r = byTime.get(t);
+        el.readout.innerHTML =
+          `<span class="meta">${r.time}</span>` +
+          `<span class="atm">ATM ${r.atm}</span>` +
+          `<span class="meta">Spot ${fmt(r.spot, 2)}</span>` +
+          `<span class="ce">CE ${fmt(r.ce)}</span>` +
+          `<span class="pe">PE ${fmt(r.pe)}</span>`;
+      });
+      el.fit.onclick = () => chart.timeScale().fitContent();
+      window.addEventListener("resize", () => {
+        chart.applyOptions({
+          width: el.chart.clientWidth,
+          height: Math.max(el.chart.clientHeight, 320),
+        });
+      });
+    }
+
+    async function loadDays() {
+      const res = await fetch("/api/option_chain_db/days");
+      const data = await res.json();
+      const days = data.days || [];
+      const today = todayIST();
+      el.day.innerHTML = "";
+      if (!days.length) {
+        const o = document.createElement("option");
+        o.value = today;
+        o.textContent = `${today} (waiting for capture…)`;
+        el.day.appendChild(o);
+      } else {
+        days.forEach((d) => {
+          const o = document.createElement("option");
+          o.value = d;
+          o.textContent = d === today ? `${d} (today)` : d;
+          el.day.appendChild(o);
+        });
+        if (!days.includes(today)) {
+          const o = document.createElement("option");
+          o.value = today;
+          o.textContent = `${today} (today)`;
+          el.day.insertBefore(o, el.day.firstChild);
+        }
+      }
+      const want = params.get("day") || today;
+      if ([...el.day.options].some((o) => o.value === want)) el.day.value = want;
+      else el.day.value = el.day.options[0].value;
+      if (params.get("week") === "next") el.week.value = "next";
+    }
+
+    function schedulePoll() {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = null;
+      if (el.day.value === todayIST()) {
+        pollTimer = setInterval(() => loadSeries({ silent: true }), 10000);
+        el.liveTag.textContent = "LIVE · refresh 10s";
+      } else {
+        el.liveTag.textContent = "historical day";
+      }
+    }
+
+    async function loadSeries({ silent = false } = {}) {
+      const day = el.day.value;
+      const week = el.week.value;
+      if (!silent) {
+        el.status.hidden = false;
+        el.status.className = "status";
+        el.status.textContent = "Loading…";
+      }
+      try {
+        const q = new URLSearchParams({ day, week });
+        const res = await fetch(`/api/option_chain_db/atm_premiums?${q}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        const points = data.points || [];
+        if (!points.length) {
+          el.panel.hidden = true;
+          el.status.hidden = false;
+          el.status.className = "status";
+          el.status.textContent =
+            `No ATM points yet for ${day}. Keep Chain capture ON — series builds every ~10s.`;
+          el.dayMeta.textContent = `${day} · ${week} week · live DB`;
+          el.footMeta.textContent = "0 points";
+          return;
+        }
+
+        ensureChart();
+        el.status.hidden = true;
+        el.panel.hidden = false;
+
+        const cePts = [];
+        const pePts = [];
+        const atmPts = [];
+        byTime = new Map();
+        for (const p of points) {
+          const t = tsUnix(p.ts);
+          if (t == null) continue;
+          if (p.ce != null) cePts.push({ time: t, value: Number(p.ce) });
+          if (p.pe != null) pePts.push({ time: t, value: Number(p.pe) });
+          if (p.atm != null) atmPts.push({ time: t, value: Number(p.atm) });
+          byTime.set(t, p);
+        }
+        ceSeries.setData(cePts);
+        peSeries.setData(pePts);
+        atmSeries.setData(atmPts);
+        if (!silent) chart.timeScale().fitContent();
+
+        const last = points[points.length - 1];
+        const atmSeen = (data.atm_seen || []).join(" / ");
+        el.dayMeta.textContent =
+          `${day} · ${week} · exp ${last.expiry || "—"} · live capture`;
+        el.footMeta.textContent =
+          `${points.length} samples · ATM CE/PE at each tick's ATM · seen ${atmSeen || "—"}` +
+          (last ? ` · last ${last.time} CE ${fmt(last.ce)} PE ${fmt(last.pe)}` : "");
+
+        // Update URL without reload
+        const u = new URL(location.href);
+        u.searchParams.set("day", day);
+        u.searchParams.set("week", week);
+        history.replaceState(null, "", u);
+      } catch (err) {
+        if (!silent) {
+          el.panel.hidden = true;
+          el.status.hidden = false;
+          el.status.className = "status err";
+          el.status.textContent = `Failed: ${err.message}`;
+        }
+      }
+    }
+
+    el.day.onchange = () => {
+      schedulePoll();
+      loadSeries();
+    };
+    el.week.onchange = () => loadSeries();
+    el.refresh.onclick = () => loadSeries();
+
+    (async () => {
+      await loadDays();
+      schedulePoll();
+      await loadSeries();
+      setTimeout(() => {
+        if (chart) {
+          chart.applyOptions({
+            width: el.chart.clientWidth,
+            height: Math.max(el.chart.clientHeight, 320),
+          });
+        }
+      }, 50);
+    })();
+  </script>
+</body>
+</html>
