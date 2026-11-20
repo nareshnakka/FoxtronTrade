@@ -114,6 +114,17 @@ if exist "%PY%" (
   )
 )
 
+REM ---- Ensure options DB exists (extract seed zip from git if needed) ----
+if exist "%PY%" (
+  if not exist "%ROOT%data\option_chain_live\chain.db" (
+    echo Options DB missing — restoring from GitHub seed zip...
+    "%PY%" "%ROOT%tools_migrate_restore.py"
+  ) else if not exist "%ROOT%data\.migrate_restore_ok" (
+    echo Verifying options DB...
+    "%PY%" "%ROOT%tools_migrate_restore.py"
+  )
+)
+
 echo Update complete.
 echo   Dashboard start: FoxtronTrade.bat
 echo.

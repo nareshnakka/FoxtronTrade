@@ -24,19 +24,22 @@ What is included
 ----------------
 - Full app code
 - data\ (option chain captures, trades, learning, etc.)
-- data\option_chain_live\chain.db  ← full live options history (auto-verified on first start)
-- data\option_chain_1m\            ← exported 1m day folders
+- data\option_chain_live\chain.db      ← full live options history (runtime)
+- data\option_chain_live\chain.db.zip  ← compressed seed (~38 MB) tracked on GitHub
+- data\option_chain_1m\                ← exported 1m day folders
 - .env (Kite API + TOTP auto-login credentials)
 - config.json, access_token.json (if present)
-- FoxtronTrade_Update.bat          ← pull latest fixes from GitHub
+- FoxtronTrade_Update.bat / AutoUpdate.bat  ← pull latest fixes + options seed from GitHub
 
 Auto-restore on new laptop
 --------------------------
-FoxtronTrade.bat runs tools_migrate_restore.py once after extract:
+FoxtronTrade.bat runs tools_migrate_restore.py once after extract / clone:
+  - if chain.db is missing, extracts it from chain.db.zip (GitHub seed)
   - checks chain.db integrity
   - flushes WAL into the main DB
   - prints day / tick counts
 No manual import step — the DB path is already wired in config.
+After AutoUpdate.bat on another machine, missing DBs are rebuilt from the zip.
 
 What is NOT included (rebuilt automatically)
 --------------------------------------------

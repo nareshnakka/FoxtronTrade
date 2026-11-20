@@ -14,7 +14,11 @@ data/sensex/minutes/
 data/sensex/fut_oi/
 data/sensex/options/
 data/backtests/
-data/option_chain_live/
+# Live options DB (runtime) — seed zip IS tracked for new-machine setup
+data/option_chain_live/chain.db
+data/option_chain_live/chain.db-wal
+data/option_chain_live/chain.db-shm
+data/option_chain_live/_pack/
 data/relaunch.lock
 data/.migrate_restore_ok
 data/_state_snap.json

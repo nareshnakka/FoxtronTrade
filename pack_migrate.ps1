@@ -42,11 +42,17 @@ function ShouldSkip([System.IO.FileSystemInfo]$item, [string]$rel) {
 
 # Flush SQLite WAL into chain.db so the zip is self-contained on the new laptop
 $chainDb = Join-Path $Root "data\option_chain_live\chain.db"
+$chainZip = Join-Path $Root "data\option_chain_live\chain.db.zip"
 $py = Join-Path $Root ".venv\Scripts\python.exe"
 if ((Test-Path $chainDb) -and (Test-Path $py)) {
   Write-Host "Checkpointing option chain DB (WAL -> chain.db)..."
   & $py -c "import sqlite3; p=r'$chainDb'; c=sqlite3.connect(p, timeout=120); c.execute('PRAGMA wal_checkpoint(TRUNCATE)'); c.close(); print('checkpoint_ok')"
   if ($LASTEXITCODE -ne 0) { Write-Host "WARN: checkpoint failed — packing main db anyway" }
+  Write-Host "Refreshing GitHub seed zip (chain.db.zip)..."
+  if (Test-Path $chainZip) { Remove-Item -Force $chainZip }
+  Compress-Archive -Path $chainDb -DestinationPath $chainZip -CompressionLevel Optimal
+  $zmb = [math]::Round((Get-Item $chainZip).Length / 1MB, 1)
+  Write-Host "  chain.db.zip = $zmb MB"
 }
 
 Write-Host "Copying files..."
