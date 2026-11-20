@@ -35,8 +35,18 @@ REM ---- First-run / missing venv: setup ----
 call :ensure_setup
 if errorlevel 1 (
   echo.
-  echo SETUP FAILED. Install Python 3.11+ from https://www.python.org/downloads/
-  echo Tick "Add python.exe to PATH", then run this bat again.
+  echo SETUP FAILED — see messages above.
+  if exist "%LOGDIR%\setup_reqs.log" (
+    echo.
+    echo --- last lines of data\setup_reqs.log ---
+    powershell -NoProfile -Command "Get-Content -LiteralPath '%LOGDIR%\setup_reqs.log' -Tail 25 -EA SilentlyContinue"
+  )
+  echo.
+  echo Tip: FoxtronTrade needs Python 3.11–3.13 ^(3.12 best^).
+  echo Very new builds ^(3.14+/3.15^) often break kiteconnect/pandas wheels.
+  echo Install 3.12 from https://www.python.org/downloads/  ^(tick Add to PATH^)
+  echo or:  winget install -e --id Python.Python.3.12
+  echo Then delete the .venv folder and run this bat again.
   echo.
   pause
   exit /b 1
@@ -121,13 +131,24 @@ echo Setup: preparing Python virtual environment...
 call :find_python
 if errorlevel 1 exit /b 1
 
+REM Stale/broken .venv from a failed first run — recreate
+if exist "%ROOT%.venv" if not exist "%SETUP_OK%" (
+  echo   Removing incomplete .venv ...
+  rmdir /s /q "%ROOT%.venv" >nul 2>&1
+)
+
 if not exist "%PY%" (
-  echo   Creating .venv ...
+  echo   Creating .venv with: %SYSPY%
   "%SYSPY%" -m venv "%ROOT%.venv"
   if errorlevel 1 (
-    echo ERROR: could not create .venv
+    echo ERROR: could not create .venv with that Python.
+    echo Try: winget install -e --id Python.Python.3.12
     exit /b 1
   )
+)
+if not exist "%PY%" (
+  echo ERROR: .venv created but Scripts\python.exe missing.
+  exit /b 1
 )
 
 echo   Upgrading pip ...
@@ -136,6 +157,7 @@ echo   Installing requirements ...
 "%PY%" -m pip install -r "%REQ%" > "%LOGDIR%\setup_reqs.log" 2>&1
 if errorlevel 1 (
   echo ERROR: pip install failed — see data\setup_reqs.log
+  echo ^(Common on Python 3.14+/3.15: no wheels yet — use Python 3.12^)
   exit /b 1
 )
 
@@ -143,13 +165,14 @@ REM Quick import check
 "%PY%" -c "import flask,kiteconnect,dotenv,pyotp,pandas,requests; print('imports_ok')" >nul 2>&1
 if errorlevel 1 (
   echo ERROR: packages installed but imports failed
+  "%PY%" -c "import flask,kiteconnect,dotenv,pyotp,pandas,requests; print('imports_ok')"
   exit /b 1
 )
 
 echo   Verifying / restoring option-chain DB ...
 "%PY%" "%ROOT%tools_migrate_restore.py"
 if errorlevel 1 (
-  echo ERROR: option DB restore/verify failed — captured history missing or corrupt
+  echo ERROR: option DB restore/verify failed — run AutoUpdate.bat or re-pack seed zip
   exit /b 1
 )
 
@@ -159,45 +182,83 @@ exit /b 0
 
 
 :find_python
+REM Prefer 3.12 / 3.11 / 3.13 — kiteconnect/pandas often lack wheels on 3.14+
 set "SYSPY="
-where py >nul 2>&1
-if not errorlevel 1 (
-  for /f "delims=" %%I in ('py -3 -c "import sys; print(sys.executable)" 2^>nul') do set "SYSPY=%%I"
+set "SYSPY_VER="
+
+call :try_py_cmd py -3.12
+if defined SYSPY goto :find_python_ok
+call :try_py_cmd py -3.11
+if defined SYSPY goto :find_python_ok
+call :try_py_cmd py -3.13
+if defined SYSPY goto :find_python_ok
+call :try_py_cmd py -3
+if defined SYSPY goto :find_python_ok
+call :try_py_cmd python
+if defined SYSPY goto :find_python_ok
+call :try_py_cmd python3
+if defined SYSPY goto :find_python_ok
+
+echo No suitable Python on PATH. Installing Python 3.12 via winget...
+call :install_python312
+if errorlevel 1 exit /b 1
+call :try_py_cmd py -3.12
+if defined SYSPY goto :find_python_ok
+call :try_py_cmd python
+if defined SYSPY goto :find_python_ok
+
+echo ERROR: Python still not found after install. Open a NEW terminal and retry.
+exit /b 1
+
+:find_python_ok
+echo   Using system Python %SYSPY_VER%: %SYSPY%
+exit /b 0
+
+
+:try_py_cmd
+REM Usage: call :try_py_cmd py -3.12   OR   call :try_py_cmd python
+set "SYSPY="
+set "SYSPY_VER="
+set "_C1=%~1"
+set "_C2=%~2"
+if /I "%_C1%"=="py" (
+  where py >nul 2>&1 || exit /b 1
+  for /f "delims=" %%I in ('py %_C2% -c "import sys; print(sys.executable)" 2^>nul') do set "SYSPY=%%I"
+) else (
+  where %_C1% >nul 2>&1 || exit /b 1
+  for /f "delims=" %%I in ('%_C1% -c "import sys; print(sys.executable)" 2^>nul') do set "SYSPY=%%I"
 )
-if not defined SYSPY (
-  where python >nul 2>&1
-  if not errorlevel 1 (
-    for /f "delims=" %%I in ('python -c "import sys; print(sys.executable)" 2^>nul') do set "SYSPY=%%I"
-  )
-)
-if not defined SYSPY (
-  echo Python not found on PATH. Trying winget install Python 3.12 ...
-  where winget >nul 2>&1
-  if errorlevel 1 (
-    echo ERROR: neither Python nor winget found.
-    exit /b 1
-  )
-  winget install -e --id Python.Python.3.12 --accept-package-agreements --accept-source-agreements
-  if errorlevel 1 (
-    echo ERROR: winget Python install failed.
-    exit /b 1
-  )
-  REM Refresh PATH for this session
-  set "PATH=%LocalAppData%\Programs\Python\Python312;%LocalAppData%\Programs\Python\Python312\Scripts;%PATH%"
-  where py >nul 2>&1
-  if not errorlevel 1 (
-    for /f "delims=" %%I in ('py -3 -c "import sys; print(sys.executable)" 2^>nul') do set "SYSPY=%%I"
-  )
-  if not defined SYSPY (
-    where python >nul 2>&1
-    if not errorlevel 1 (
-      for /f "delims=" %%I in ('python -c "import sys; print(sys.executable)" 2^>nul') do set "SYSPY=%%I"
-    )
-  )
-)
-if not defined SYSPY (
-  echo ERROR: Python still not found after install attempt.
+if not defined SYSPY exit /b 1
+if not exist "!SYSPY!" (
+  set "SYSPY="
   exit /b 1
 )
-echo   Using system Python: %SYSPY%
+for /f "delims=" %%V in ('"!SYSPY!" -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')" 2^>nul') do set "SYSPY_VER=%%V"
+if not defined SYSPY_VER (
+  set "SYSPY="
+  exit /b 1
+)
+REM Accept 3.11 / 3.12 / 3.13 only
+if "!SYSPY_VER!"=="3.11" exit /b 0
+if "!SYSPY_VER!"=="3.12" exit /b 0
+if "!SYSPY_VER!"=="3.13" exit /b 0
+echo   Skipping Python !SYSPY_VER! at !SYSPY! ^(need 3.11-3.13 for trading deps^)
+set "SYSPY="
+set "SYSPY_VER="
+exit /b 1
+
+
+:install_python312
+where winget >nul 2>&1
+if errorlevel 1 (
+  echo ERROR: winget not found. Install Python 3.12 manually:
+  echo   https://www.python.org/downloads/release/python-31210/
+  exit /b 1
+)
+winget install -e --id Python.Python.3.12 --accept-package-agreements --accept-source-agreements
+if errorlevel 1 (
+  echo ERROR: winget Python 3.12 install failed.
+  exit /b 1
+)
+set "PATH=%LocalAppData%\Programs\Python\Python312;%LocalAppData%\Programs\Python\Python312\Scripts;%ProgramFiles%\Python312;%ProgramFiles%\Python312\Scripts;%PATH%"
 exit /b 0
