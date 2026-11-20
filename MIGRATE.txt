@@ -12,6 +12,14 @@ FoxtronTrade — migrate to a new laptop
 
 3) Double-click  FoxtronTrade.bat  again to STOP
 
+4) Bug-fix updates from GitHub (other laptop)
+   Double-click  FoxtronTrade_Update.bat
+   - Pulls latest master from https://github.com/nareshnakka/FoxtronTrade.git
+   - Stops the engine while updating, then offers to restart
+   - Keeps local .env / access_token.json (not in git)
+   - If this folder came from a migrate zip (no .git), it links to GitHub on first run
+   - Needs Git (installs via winget if missing) + internet
+
 What is included
 ----------------
 - Full app code
@@ -20,6 +28,7 @@ What is included
 - data\option_chain_1m\            ← exported 1m day folders
 - .env (Kite API + TOTP auto-login credentials)
 - config.json, access_token.json (if present)
+- FoxtronTrade_Update.bat          ← pull latest fixes from GitHub
 
 Auto-restore on new laptop
 --------------------------
