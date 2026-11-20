@@ -52,7 +52,7 @@ if errorlevel 1 (
   if errorlevel 1 goto :fail
   call :try_py_exe "%LOCALPY%"
   if not defined SYSPY (
-    echo ERROR: portable Python missing after bootstrap: %LOCALPY%
+    echo ERROR: portable Python missing or unusable after bootstrap: %LOCALPY%
     goto :fail
   )
 )
@@ -175,7 +175,13 @@ set "_CAND=%~1"
 if "%_CAND%"=="" exit /b 1
 if not exist "%_CAND%" exit /b 1
 echo %_CAND% | findstr /I "WindowsApps" >nul && exit /b 1
-for /f "delims=" %%V in ('"%_CAND%" -c "import sys; print(f'{sys.version_info[0]}.{sys.version_info[1]}')" 2^>nul') do set "SYSPY_VER=%%V"
+REM for /f + quoted exe path drops stdout; probe via temp file instead.
+set "_VERFILE=%TEMP%\foxtrade_pyver_%RANDOM%.txt"
+"%_CAND%" -c "import sys; print(str(sys.version_info[0])+chr(46)+str(sys.version_info[1]))" > "%_VERFILE%" 2>nul
+if exist "%_VERFILE%" (
+  set /p SYSPY_VER=<"%_VERFILE%"
+  del /q "%_VERFILE%" >nul 2>&1
+)
 if not defined SYSPY_VER exit /b 1
 if not "!SYSPY_VER!"=="3.11" if not "!SYSPY_VER!"=="3.12" if not "!SYSPY_VER!"=="3.13" (
   echo   Skipping Python !SYSPY_VER! at %_CAND% ^(need 3.11-3.13^)
