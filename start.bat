@@ -1,16 +1,15 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
-title FoxtronTrade — Start
+title FoxtronTrade - Start
 
 set "ROOT=%~dp0"
-set "PY=%ROOT%.venv\Scripts\python.exe"
 set "LOGDIR=%ROOT%data"
 if not exist "%LOGDIR%" mkdir "%LOGDIR%"
 
 echo.
 echo ============================================
-echo   FoxtronTrade — Start ^(24x7^)
+echo   FoxtronTrade - Start (24x7)
 echo ============================================
 echo.
 
@@ -25,16 +24,24 @@ echo Running Setup if needed...
 call "%ROOT%Setup.bat" nopause
 if errorlevel 1 (
   echo.
-  echo Start aborted — Setup failed.
+  echo Start aborted - Setup failed.
   pause
   exit /b 1
 )
+
+call :resolve_py
+if not defined PY (
+  echo ERROR: no Python found after Setup.
+  pause
+  exit /b 1
+)
+echo   Python: %PY%
 
 if not exist "%ROOT%data\.migrate_restore_ok" (
   echo Verifying options DB...
   "%PY%" "%ROOT%tools_migrate_restore.py"
   if errorlevel 1 (
-    echo ERROR: options DB missing/corrupt — run Update.bat then Setup.bat
+    echo ERROR: options DB missing/corrupt - run Update.bat then Setup.bat
     pause
     exit /b 1
   )
@@ -57,6 +64,23 @@ echo.
 echo Supervisor exited code !EC!
 pause
 exit /b !EC!
+
+
+:resolve_py
+set "PY="
+if exist "%ROOT%.venv\Scripts\python.exe" (
+  set "PY=%ROOT%.venv\Scripts\python.exe"
+  exit /b 0
+)
+if exist "%ROOT%.venv\python_path.txt" (
+  for /f "usebackq delims=" %%P in ("%ROOT%.venv\python_path.txt") do set "PY=%%P"
+  if defined PY if exist "!PY!" exit /b 0
+)
+if exist "%ROOT%runtime\Python312\python.exe" (
+  set "PY=%ROOT%runtime\Python312\python.exe"
+  exit /b 0
+)
+exit /b 1
 
 
 :is_running
