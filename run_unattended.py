@@ -8,7 +8,7 @@
 
 Usage:
   .venv\\Scripts\\python.exe run_unattended.py
-  start_unattended.bat
+  Start.bat
 """
 from __future__ import annotations
 
@@ -89,7 +89,7 @@ def _acquire_singleton() -> None:
         print(
             "ERROR: another unattended supervisor already running "
             f"(pid={', '.join(map(str, rivals))}).\n"
-            "Close that window / stop start_unattended.bat first. "
+            "Close that window / run Stop.bat first. "
             "Only ONE unattended copy is allowed.",
             flush=True,
         )

@@ -1,7 +1,7 @@
 @echo off
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
-title FoxtronTrade — Auto Update
+title FoxtronTrade - Update
 
 set "ROOT=%~dp0"
 set "REPO=https://github.com/nareshnakka/FoxtronTrade.git"
@@ -17,15 +17,14 @@ echo ==== %DATE% %TIME% update start ====>> "%LOG%"
 
 echo.
 echo ============================================
-echo   FoxtronTrade — Auto Update from GitHub
+echo   FoxtronTrade - Update from GitHub
 echo ============================================
 echo   Repo: %REPO%
 echo.
 
-REM ---- Stop trading while updating ----
 call :is_running
 if !ERRORLEVEL! EQU 1 (
-  echo Engine is RUNNING — stopping before update...
+  echo Engine is RUNNING - stopping before update...
   call :stop_all
   echo Stopped.
   echo.
@@ -34,19 +33,16 @@ if !ERRORLEVEL! EQU 1 (
   set "WAS_RUNNING=0"
 )
 
-REM Snapshot requirements hash to detect dep changes
 set "REQ_BEFORE="
 if exist "%ROOT%requirements.txt" (
   for /f %%H in ('certutil -hashfile "%ROOT%requirements.txt" SHA256 ^| findstr /v ":" ^| findstr /v "CertUtil"') do set "REQ_BEFORE=%%H"
 )
 
 set "USED_ZIP=0"
-
-REM ---- Try git first; fall back to ZIP download ----
 call :try_git_update
 if errorlevel 1 (
   echo.
-  echo Git update failed — trying direct ZIP download from GitHub...
+  echo Git update failed - trying direct ZIP download from GitHub...
   call :zip_update
   if errorlevel 1 (
     echo.
@@ -65,7 +61,6 @@ if errorlevel 1 (
   set "USED_ZIP=1"
 )
 
-:after_pull
 if "%USED_ZIP%"=="1" (
   echo Updated via ZIP download.
 ) else (
@@ -75,46 +70,34 @@ if "%USED_ZIP%"=="1" (
 )
 echo.
 
-REM ---- Refresh Python deps if requirements changed ----
 set "REQ_AFTER="
 if exist "%ROOT%requirements.txt" (
   for /f %%H in ('certutil -hashfile "%ROOT%requirements.txt" SHA256 ^| findstr /v ":" ^| findstr /v "CertUtil"') do set "REQ_AFTER=%%H"
 )
+
+echo Running Setup if needed...
+call "%ROOT%Setup.bat" nopause
+if errorlevel 1 (
+  echo WARN: Setup had errors after update - run Setup.bat manually.
+)
+
 if exist "%PY%" (
   if /I not "%REQ_BEFORE%"=="%REQ_AFTER%" (
-    echo requirements.txt changed — updating .venv packages...
-    "%PY%" -m pip install -r "%ROOT%requirements.txt" >> "%LOG%" 2>&1
-    if errorlevel 1 (
-      echo WARN: pip install had errors — see %LOG%
-    ) else (
-      echo Packages updated.
-    )
-    echo.
+    echo requirements.txt changed - packages refreshed by Setup.
   )
 )
 
-REM ---- Ensure options DB exists (extract seed zip if needed) ----
-if exist "%PY%" (
-  if not exist "%ROOT%data\option_chain_live\chain.db" (
-    echo Options DB missing — restoring from seed zip...
-    "%PY%" "%ROOT%tools_migrate_restore.py"
-  ) else if not exist "%ROOT%data\.migrate_restore_ok" (
-    echo Verifying options DB...
-    "%PY%" "%ROOT%tools_migrate_restore.py"
-  )
-)
-
+echo.
 echo Update complete.
-echo   Next: FoxtronTrade.bat
+echo   Next: Start.bat
 echo.
 
 if "%WAS_RUNNING%"=="1" (
-  echo Engine was running before update.
-  choice /C YN /M "Start FoxtronTrade now"
+  choice /C YN /M "Start now"
   if errorlevel 2 goto :done
   if errorlevel 1 (
     echo Starting...
-    start "FoxtronTrade" cmd /c ""%ROOT%FoxtronTrade.bat""
+    start "FoxtronTrade" cmd /c ""%ROOT%Start.bat""
   )
 )
 
@@ -127,39 +110,32 @@ exit /b 0
 :try_git_update
 where git >nul 2>&1
 if errorlevel 1 (
-  echo Git not installed — will use ZIP method.
+  echo Git not installed - will use ZIP method.
   echo git_missing>> "%LOG%"
   exit /b 1
 )
-
 call :ensure_repo
 if errorlevel 1 exit /b 1
-
 echo Fetching latest via git...
 git -C "%ROOT%" fetch --prune origin %BRANCH% >> "%LOG%" 2>&1
 if errorlevel 1 (
   echo   git fetch failed.
-  type "%LOG%" | more +0
   powershell -NoProfile -Command "Get-Content -LiteralPath '%LOG%' -Tail 20 -EA SilentlyContinue"
   exit /b 1
 )
-
 for /f "delims=" %%C in ('git -C "%ROOT%" rev-parse HEAD 2^>nul') do set "OLD=%%C"
 for /f "delims=" %%C in ('git -C "%ROOT%" rev-parse origin/%BRANCH% 2^>nul') do set "NEW=%%C"
-
 if /I "%OLD%"=="%NEW%" (
   echo Already up to date.
   echo   Commit: %OLD%
   exit /b 0
 )
-
 echo Updating %OLD:~0,7% -^> %NEW:~0,7% ...
-echo   (.env / access_token.json stay local — not in git)
-
+echo   (.env / access_token.json stay local - not in git)
 git -C "%ROOT%" merge --ff-only "origin/%BRANCH%" >> "%LOG%" 2>&1
 if errorlevel 1 (
-  echo Local changes blocked fast-forward — syncing to GitHub tip...
-  git -C "%ROOT%" stash push -u -m "FoxtronTrade_Update auto-stash" >> "%LOG%" 2>&1
+  echo Local changes blocked fast-forward - syncing to GitHub tip...
+  git -C "%ROOT%" stash push -u -m "Update auto-stash" >> "%LOG%" 2>&1
   git -C "%ROOT%" reset --hard "origin/%BRANCH%" >> "%LOG%" 2>&1
   if errorlevel 1 (
     echo   git reset failed.
@@ -179,8 +155,7 @@ if exist "%ROOT%.git" (
   )
   exit /b 0
 )
-
-echo No .git folder — initializing for git updates...
+echo No .git folder - initializing for git updates...
 git -C "%ROOT%" init >> "%LOG%" 2>&1
 git -C "%ROOT%" remote add origin "%REPO%" >> "%LOG%" 2>&1
 git -C "%ROOT%" fetch origin %BRANCH% >> "%LOG%" 2>&1
@@ -198,11 +173,9 @@ exit /b 0
 
 
 :zip_update
-REM Download master.zip and overlay code while keeping secrets / local runtime
 if exist "%TMP%" rmdir /s /q "%TMP%" >nul 2>&1
 mkdir "%TMP%" >nul 2>&1
 set "ZIPFILE=%TMP%\master.zip"
-
 echo   Downloading master.zip ...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$ProgressPreference='SilentlyContinue'; " ^
@@ -221,7 +194,6 @@ if errorlevel 1 (
   echo   ZIP download failed.
   exit /b 1
 )
-
 echo   Extracting...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "Expand-Archive -LiteralPath '%ZIPFILE%' -DestinationPath '%TMP%\extract' -Force"
@@ -229,8 +201,6 @@ if errorlevel 1 (
   echo   Expand-Archive failed.
   exit /b 1
 )
-
-REM GitHub zip extracts to FoxtronTrade-master\
 set "SRC="
 for /d %%D in ("%TMP%\extract\*") do set "SRC=%%~fD"
 if not defined SRC (
@@ -238,7 +208,6 @@ if not defined SRC (
   exit /b 1
 )
 echo   Source: %SRC%
-
 echo   Backing up local secrets / live DB...
 set "BAK=%TMP%\preserve"
 mkdir "%BAK%" >nul 2>&1
@@ -251,7 +220,6 @@ if exist "%ROOT%data\option_chain_live\chain.db" (
   if exist "%ROOT%data\option_chain_live\chain.db-shm" copy /y "%ROOT%data\option_chain_live\chain.db-shm" "%BAK%\option_chain_live\" >nul
 )
 if exist "%ROOT%data\trades.json" copy /y "%ROOT%data\trades.json" "%BAK%\trades.json" >nul
-
 echo   Applying update ^(keeps .venv / runtime / secrets^)...
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$src='%SRC%'; $dst='%ROOT%'.TrimEnd('\'); " ^
@@ -276,7 +244,6 @@ if errorlevel 1 (
   echo   File copy failed.
   exit /b 1
 )
-
 echo   Restoring local secrets / live DB...
 if exist "%BAK%\.env" copy /y "%BAK%\.env" "%ROOT%.env" >nul
 if exist "%BAK%\access_token.json" copy /y "%BAK%\access_token.json" "%ROOT%access_token.json" >nul
@@ -285,7 +252,6 @@ if exist "%BAK%\option_chain_live\chain.db" (
   copy /y "%BAK%\option_chain_live\*" "%ROOT%data\option_chain_live\" >nul
 )
 if exist "%BAK%\trades.json" copy /y "%BAK%\trades.json" "%ROOT%data\trades.json" >nul
-
 rmdir /s /q "%TMP%" >nul 2>&1
 echo   ZIP update OK.
 exit /b 0

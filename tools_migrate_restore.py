@@ -1,7 +1,7 @@
 """
 Verify / prepare option-chain DB after migrate extract or GitHub clone.
 
-Runs automatically from FoxtronTrade.bat on first start.
+Runs automatically from Setup.bat / Start.bat.
 If chain.db is missing but chain.db.zip is present (from git), extracts it.
 
 Safe to re-run anytime:
@@ -94,7 +94,7 @@ def main() -> int:
         else:
             _fail(f"missing {DB.relative_to(ROOT)}")
             _fail("and no seed zip at data/option_chain_live/chain.db.zip")
-            _fail("Run AutoUpdate.bat or re-pack from the source laptop.")
+            _fail("Run Update.bat or re-pack from the source laptop.")
             return 1
 
     size_mb = DB.stat().st_size / (1024 * 1024)

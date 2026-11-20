@@ -87,7 +87,10 @@ Get-ChildItem -LiteralPath $Root -Force | ForEach-Object {
 
 # Ensure migrate docs / start bat are present
 Copy-Item -LiteralPath (Join-Path $Root "MIGRATE.txt") -Destination (Join-Path $Dest "MIGRATE.txt") -Force -ErrorAction SilentlyContinue
-Copy-Item -LiteralPath (Join-Path $Root "FoxtronTrade.bat") -Destination (Join-Path $Dest "FoxtronTrade.bat") -Force
+foreach ($bat in @("Setup.bat","Start.bat","Stop.bat","Update.bat")) {
+  $p = Join-Path $Root $bat
+  if (Test-Path $p) { Copy-Item -LiteralPath $p -Destination (Join-Path $Dest $bat) -Force }
+}
 
 Write-Host ("Copied {0} files ({1:N1} MB)" -f $copied, ($bytes / 1MB))
 Write-Host "Compressing zip (this can take a few minutes)..."
@@ -122,5 +125,5 @@ Write-Host "READY:"
 Write-Host "  $ZipPath"
 Write-Host ("  Size: {0:N1} MB" -f ($zipSize / 1MB))
 Write-Host ""
-Write-Host "On the new laptop: extract zip -> double-click FoxtronTrade.bat"
+Write-Host "On the new laptop: extract zip -> Setup.bat then Start.bat"
 exit 0

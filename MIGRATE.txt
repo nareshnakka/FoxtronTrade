@@ -1,62 +1,45 @@
-FoxtronTrade — migrate to a new laptop
-======================================
+FoxtronTrade — migrate / other laptop
+=====================================
 
-1) On the NEW laptop, extract this zip anywhere
-   (example: D:\FoxtronTrade or C:\Users\You\FoxtronTrade)
+Only 4 bats (use these):
+  Setup.bat   — install Python/.venv + restore options DB (auto)
+  Start.bat   — start 24x7 engine (runs Setup if needed)
+  Stop.bat    — stop engine / dashboard
+  Update.bat  — pull latest from GitHub (git or ZIP fallback), then Setup
 
-2) Double-click  FoxtronTrade.bat  (preferred)
-   - First run: FoxtronTrade_Setup.bat creates .venv + installs deps (needs internet)
-   - If no Python 3.11–3.13 on the PC, it downloads official Python 3.12 into runtime\Python312
-     (no admin / PATH needed) then builds .venv from that
-   - Then starts 24×7 unattended mode
+1) Extract / clone anywhere
+   (example: D:\FoxtronTrade)
+
+2) Put your .env here (Kite API + TOTP). access_token.json optional.
+
+3) Double-click  Setup.bat  once
+   - Downloads Python 3.12 into runtime\Python312 if needed (no admin)
+   - Creates .venv and installs packages
+   - Restores options DB from data\option_chain_live\chain.db.zip
+
+4) Double-click  Start.bat
    - Dashboard: http://127.0.0.1:5050
-   - If setup failed once: delete .venv and runtime folders, then run FoxtronTrade.bat again
-   - start_unattended.bat / restart.bat also auto-create .venv (do not expect a prebuilt .venv)
+   - Leave window open for 24x7
 
-3) Double-click  FoxtronTrade.bat  again to STOP
+5) Double-click  Stop.bat  to stop
 
-4) Bug-fix updates from GitHub (other laptop)
-   Double-click  AutoUpdate.bat  (or FoxtronTrade_Update.bat)
-   - Tries git pull first; if GitHub/git fails, downloads master.zip instead
-   - Stops the engine while updating, then offers to restart
-   - Keeps local .env / access_token.json / live chain.db / .venv / runtime
-   - Needs internet (git optional)
+6) Bug fixes: double-click  Update.bat  then  Start.bat
 
-What is included
-----------------
-- Full app code
-- data\ (option chain captures, trades, learning, etc.)
-- data\option_chain_live\chain.db      ← full live options history (runtime)
-- data\option_chain_live\chain.db.zip  ← compressed seed (~38 MB) tracked on GitHub
-- data\option_chain_1m\                ← exported 1m day folders
-- .env (Kite API + TOTP auto-login credentials)
-- config.json, access_token.json (if present)
-- FoxtronTrade_Update.bat / AutoUpdate.bat  ← pull latest fixes + options seed from GitHub
-
-Auto-restore on new laptop
---------------------------
-FoxtronTrade.bat runs tools_migrate_restore.py once after extract / clone:
-  - if chain.db is missing, extracts it from chain.db.zip (GitHub seed)
-  - checks chain.db integrity
-  - flushes WAL into the main DB
-  - prints day / tick counts
-No manual import step — the DB path is already wired in config.
-After AutoUpdate.bat on another machine, missing DBs are rebuilt from the zip.
-
-What is NOT included (rebuilt automatically)
---------------------------------------------
-- .venv  (recreated on first start)
-- .git / __pycache__
+What is kept local (never overwritten by Update)
+-----------------------------------------------
+- .env
+- access_token.json
+- .venv / runtime
+- data\option_chain_live\chain.db (live DB)
+- data\trades.json
 
 New laptop checklist
 --------------------
 - Keep laptop plugged in
 - Windows Sleep = Never (while plugged in)
-- Leave FoxtronTrade.bat window open for 24×7
-- Firewall: allow Python on private network if prompted
-- Zerodha redirect URL still: http://127.0.0.1:5000/callback
-  (local forwarder bridges to dashboard :5050)
+- Leave Start.bat window open for 24x7
+- Zerodha redirect URL: http://127.0.0.1:5000/callback
 
-Optional checks after first start
----------------------------------
-  .venv\Scripts\python.exe tools_check_unattended.py
+Packing a migrate zip (source laptop only)
+------------------------------------------
+  pack_migrate.bat

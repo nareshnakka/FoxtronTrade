@@ -1,11 +1,33 @@
 @echo off
-setlocal
+setlocal EnableExtensions
 cd /d "%~dp0"
+title FoxtronTrade — Stop
 
-echo Stopping FoxtronTrade on port 5050...
+set "ROOT=%~dp0"
+
+echo.
+echo ============================================
+echo   FoxtronTrade — Stop
+echo ============================================
+echo.
+
+echo Stopping engine / dashboard...
 powershell -NoProfile -Command ^
-  "Get-NetTCPConnection -LocalPort 5050 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"
+  "Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" -EA SilentlyContinue | ForEach-Object { " ^
+  "  if ($_.CommandLine -and ($_.CommandLine -like '*run_unattended.py*' -or $_.CommandLine -like '*\\app.py*' -or $_.CommandLine -like '* app.py*')) { " ^
+  "    Stop-Process -Id $_.ProcessId -Force -EA SilentlyContinue " ^
+  "  } " ^
+  "}; " ^
+  "foreach ($p in 5050,5000) { " ^
+  "  Get-NetTCPConnection -LocalPort $p -EA SilentlyContinue | ForEach-Object { " ^
+  "    Stop-Process -Id $_.OwningProcess -Force -EA SilentlyContinue " ^
+  "  } " ^
+  "}"
 
+if exist "%ROOT%data\unattended.lock" del /f /q "%ROOT%data\unattended.lock" >nul 2>&1
 timeout /t 1 /nobreak >nul
+
 echo Stopped.
-endlocal
+echo.
+pause
+exit /b 0

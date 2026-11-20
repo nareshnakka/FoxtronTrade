@@ -50,7 +50,7 @@ def main() -> None:
         print("After filling .env, re-run:")
         print("  .venv\\Scripts\\python.exe tools_check_unattended.py")
         print("Then start 24×7 with:")
-        print("  start_unattended.bat")
+        print("  Start.bat")
     else:
         print("All credentials present. Testing session / auto-login…")
         from foxtrade.auto_login import ensure_kite_session
@@ -60,7 +60,7 @@ def main() -> None:
         print(f"  auto_login={res.get('auto_login')} reason={res.get('reason')}")
         if res.get("ok"):
             print()
-            print("READY for 24×7. Run: start_unattended.bat")
+            print("READY for 24×7. Run: Start.bat")
             print("Keep laptop awake (Sleep = Never).")
         else:
             print()

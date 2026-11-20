@@ -1,8 +1,9 @@
 @echo off
-REM Shared .venv bootstrap for FoxtronTrade entry points.
-REM Prefer system Python 3.11-3.13; otherwise install a project-local copy under runtime\Python312.
+REM FoxtronTrade — one-time / repair setup (Python + .venv + options DB)
+REM Prefer system Python 3.11-3.13; otherwise install project-local runtime\Python312.
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
+title FoxtronTrade — Setup
 
 set "ROOT=%~dp0"
 set "PY=%ROOT%.venv\Scripts\python.exe"
@@ -14,27 +15,33 @@ set "LOCALPY=%RUNTIME%\Python312\python.exe"
 set "PY_VER=3.12.10"
 set "PY_URL=https://www.python.org/ftp/python/%PY_VER%/python-%PY_VER%-amd64.exe"
 set "PY_INSTALLER=%RUNTIME%\python-%PY_VER%-amd64.exe"
+set "NOPAUSE=%~1"
 if not exist "%LOGDIR%" mkdir "%LOGDIR%"
 if not exist "%RUNTIME%" mkdir "%RUNTIME%"
 
+echo.
+echo ============================================
+echo   FoxtronTrade — Setup
+echo ============================================
+echo.
+
 if exist "%PY%" if exist "%SETUP_OK%" (
   echo Setup: OK ^(.venv ready^)
+  if /I not "%NOPAUSE%"=="nopause" pause
   endlocal & exit /b 0
 )
 
-echo Setup: preparing Python virtual environment...
+echo Preparing Python virtual environment...
 call :refresh_path
 call :find_python
 if errorlevel 1 (
   echo No suitable system Python — installing project-local Python %PY_VER% ...
   call :install_local_python
-  if errorlevel 1 (
-    endlocal & exit /b 1
-  )
+  if errorlevel 1 goto :fail
   call :try_py_exe "%LOCALPY%"
   if not defined SYSPY (
     echo ERROR: local Python install finished but runtime\Python312\python.exe missing.
-    endlocal & exit /b 1
+    goto :fail
   )
 )
 
@@ -51,12 +58,12 @@ if not exist "%PY%" (
   if errorlevel 1 (
     echo ERROR: could not create .venv — see data\setup_venv.log
     type "%LOGDIR%\setup_venv.log"
-    endlocal & exit /b 1
+    goto :fail
   )
 )
 if not exist "%PY%" (
   echo ERROR: .venv created but Scripts\python.exe missing.
-  endlocal & exit /b 1
+  goto :fail
 )
 
 echo   Upgrading pip ...
@@ -68,26 +75,38 @@ if errorlevel 1 (
   echo.
   echo --- last lines of data\setup_reqs.log ---
   powershell -NoProfile -Command "Get-Content -LiteralPath '%LOGDIR%\setup_reqs.log' -Tail 40 -EA SilentlyContinue"
-  endlocal & exit /b 1
+  goto :fail
 )
 
 "%PY%" -c "import flask,kiteconnect,dotenv,pyotp,pandas,requests; print('imports_ok')" >nul 2>&1
 if errorlevel 1 (
   echo ERROR: packages installed but imports failed
   "%PY%" -c "import flask,kiteconnect,dotenv,pyotp,pandas,requests; print('imports_ok')"
-  endlocal & exit /b 1
+  goto :fail
 )
 
 echo   Verifying / restoring option-chain DB ...
 "%PY%" "%ROOT%tools_migrate_restore.py"
 if errorlevel 1 (
-  echo ERROR: option DB restore/verify failed — run AutoUpdate.bat then retry
-  endlocal & exit /b 1
+  echo ERROR: option DB restore/verify failed — run Update.bat then Setup.bat again
+  goto :fail
 )
 
 echo ok> "%SETUP_OK%"
+echo.
 echo Setup: DONE
+echo Next: double-click Start.bat
+echo.
+if /I not "%NOPAUSE%"=="nopause" pause
 endlocal & exit /b 0
+
+:fail
+echo.
+echo SETUP FAILED.
+echo Tip: delete .venv and runtime folders, check internet, run Setup.bat again.
+echo.
+if /I not "%NOPAUSE%"=="nopause" pause
+endlocal & exit /b 1
 
 
 :refresh_path
@@ -99,11 +118,8 @@ exit /b 0
 :find_python
 set "SYSPY="
 set "SYSPY_VER="
-
-REM Prefer already-bootstrapped local runtime first
 call :try_py_exe "%LOCALPY%"
 if defined SYSPY exit /b 0
-
 call :try_py_exe "%LocalAppData%\Programs\Python\Python312\python.exe"
 if defined SYSPY exit /b 0
 call :try_py_exe "%LocalAppData%\Programs\Python\Python311\python.exe"
@@ -116,7 +132,6 @@ call :try_py_exe "%ProgramFiles%\Python311\python.exe"
 if defined SYSPY exit /b 0
 call :try_py_exe "%ProgramFiles%\Python313\python.exe"
 if defined SYSPY exit /b 0
-
 call :try_py_cmd py -3.12
 if defined SYSPY exit /b 0
 call :try_py_cmd py -3.11
@@ -127,7 +142,6 @@ call :try_py_cmd py -3
 if defined SYSPY exit /b 0
 call :try_py_cmd python
 if defined SYSPY exit /b 0
-
 exit /b 1
 
 
@@ -172,7 +186,6 @@ if exist "%LOCALPY%" (
   echo   Local runtime already present: %LOCALPY%
   exit /b 0
 )
-
 echo   Downloading Python %PY_VER% ^(official installer^)...
 echo   URL: %PY_URL%
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
@@ -189,29 +202,22 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "}"
 if errorlevel 1 (
   echo ERROR: could not download Python installer. Check internet / firewall.
-  echo Manual: open %PY_URL% and install, OR place python.exe at:
-  echo   %LOCALPY%
+  echo Manual: open %PY_URL%  OR place python.exe at: %LOCALPY%
   exit /b 1
 )
-
 echo   Installing into: %RUNTIME%\Python312
-echo   ^(silent, no PATH changes, no admin needed^)
 "%PY_INSTALLER%" /quiet InstallAllUsers=0 PrependPath=0 Include_test=0 Include_launcher=0 Include_doc=0 Shortcuts=0 SimpleInstall=1 TargetDir="%RUNTIME%\Python312"
 set "EC=!ERRORLEVEL!"
 if not exist "%LOCALPY%" (
-  echo ERROR: installer finished but python.exe not found at:
-  echo   %LOCALPY%
+  echo ERROR: installer finished but python.exe not found at %LOCALPY%
   echo Installer exit code: !EC!
-  echo Try running the installer manually:
-  echo   "%PY_INSTALLER%"
+  echo Try: "%PY_INSTALLER%"
   exit /b 1
 )
-
 "%LOCALPY%" -c "import sys; print('local_python', sys.version)" || (
   echo ERROR: local python.exe does not run.
   exit /b 1
 )
-
 echo   Local Python ready.
 del /f /q "%PY_INSTALLER%" >nul 2>&1
 exit /b 0
