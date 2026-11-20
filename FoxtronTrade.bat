@@ -42,11 +42,8 @@ if errorlevel 1 (
     powershell -NoProfile -Command "Get-Content -LiteralPath '%LOGDIR%\setup_reqs.log' -Tail 25 -EA SilentlyContinue"
   )
   echo.
-  echo Tip: FoxtronTrade needs Python 3.11–3.13 ^(3.12 best^).
-  echo Very new builds ^(3.14+/3.15^) often break kiteconnect/pandas wheels.
-  echo Install 3.12 from https://www.python.org/downloads/  ^(tick Add to PATH^)
-  echo or:  winget install -e --id Python.Python.3.12
-  echo Then delete the .venv folder and run this bat again.
+  echo Tip: delete .venv and runtime folders, then run FoxtronTrade.bat again.
+  echo Setup can download its own Python 3.12 into runtime\Python312 ^(needs internet^).
   echo.
   pause
   exit /b 1
