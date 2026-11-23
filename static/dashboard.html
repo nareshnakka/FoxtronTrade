@@ -458,8 +458,8 @@
   <div id="authBanner">
     <strong>Kite login required</strong>
     <span id="authReason" class="meta"></span>
-    <button type="button" class="login" id="authLoginBtn">Login with Kite</button>
-    <span class="meta">Redirect URL must be http://127.0.0.1:5050/callback</span>
+    <button type="button" class="login" id="authLoginBtn">Login</button>
+    <span class="meta">Uses TOTP auto-login when configured · else opens Kite browser login</span>
   </div>
   <div id="linkAlertBanner">
     <strong>⚠ Zerodha link down — OPEN positions unprotected</strong>
@@ -2294,22 +2294,68 @@
     }
 
     async function openKiteLogin() {
+      const btn = document.getElementById("authLoginBtn");
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Logging in…";
+      }
       try {
-        const r = await fetch("/api/auth/login_url");
-        const j = await r.json();
-        if (!j.ok || !j.login_url) {
-          showToast(j.error || "Cannot get Kite login URL");
+        const r = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { Accept: "application/json" },
+        });
+        const raw = await r.text();
+        let j = null;
+        try {
+          j = JSON.parse(raw);
+        } catch (_) {
+          // Old process / HTML 404 — fall back to login_url endpoint
+          showToast("Server needs restart for auto-login — opening Kite…");
+          const r2 = await fetch("/api/auth/login_url");
+          const j2 = await r2.json();
+          if (j2.ok && j2.login_url) {
+            window.open(j2.login_url, "_blank", "noopener");
+          } else {
+            showToast("Login endpoint not ready — Stop then Start the app");
+          }
           return;
         }
-        window.open(j.login_url, "_blank", "noopener");
-        showToast("Complete Kite login in the new tab…");
+        if (j.error && !j.mode) {
+          showToast("Login failed: " + j.error);
+          return;
+        }
+        // TOTP auto-login succeeded — stay on dashboard, no browser tab
+        if (j.ok && (j.mode === "auto" || j.needs_login === false)) {
+          applyAuth({ auth: j });
+          showToast(
+            "Logged in" + (j.user_name || j.user_id ? " — " + (j.user_name || j.user_id) : "")
+          );
+          try { await tick(); } catch (_) {}
+          return;
+        }
+        // Auto failed or not configured — open browser only if we have a URL
+        if (j.login_url) {
+          window.open(j.login_url, "_blank", "noopener");
+          showToast(
+            j.mode === "auto_failed"
+              ? "Auto-login failed — complete Kite login in the new tab…"
+              : "Complete Kite login in the new tab…"
+          );
+          return;
+        }
+        showToast(j.message || j.reason || "Login failed");
       } catch (err) {
         showToast("Login error: " + err);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.textContent = "Login";
+        }
       }
     }
 
     async function logoutKite() {
-      if (!confirm("Logout Kite session on this machine?\n\nAuto-login stays off until you click Login again (or restart the app).")) {
+      if (!confirm("Logout Kite session?\n\nRevokes the Zerodha token and blocks auto-login until you click Login.")) {
         return;
       }
       try {
@@ -2320,7 +2366,16 @@
           return;
         }
         applyAuth({ auth: j });
-        showToast("Logged out — click Login with Kite when ready");
+        const bits = [];
+        if (j.invalidated) bits.push("revoked at Zerodha");
+        else if (j.invalidate_error) bits.push("local clear (API revoke failed)");
+        if (j.cleared) bits.push("token file removed");
+        showToast(
+          "Logged out" + (bits.length ? " — " + bits.join(", ") : "") +
+          " · auto-login off until Login"
+        );
+        // Force a state refresh so badge/banner stay logged-out
+        try { await tick(); } catch (_) {}
       } catch (err) {
         showToast("Logout error: " + err);
       }
@@ -2683,8 +2738,11 @@
       const state = a2s.phase || (st.in_session ? "SCAN" : "OUT_OF_WINDOW");
       const hbAge = Number(st.heartbeat?.tick_age ?? st.heartbeat?.age_sec);
       const stall = st.stall_alert || {};
-      const tickStale = Number(stall.hb_age) > 120;
-      const hbDead = (Number.isFinite(hbAge) && hbAge > 120) || (stall.alerting && tickStale);
+      const maxHb = Number(stall.max_hb_age_sec || st.config?.heartbeat_max_age_sec || 180);
+      const tickStale = Number.isFinite(Number(stall.hb_age)) && Number(stall.hb_age) > maxHb;
+      // Trust server stall.alerting — do not invent STUCK from pulse/age alone
+      // (soft-restart seeds tick_ts; brief gaps must not flash ALGO STUCK).
+      const hbDead = !!stall.alerting && tickStale;
       const runBadge = document.getElementById("runBadge");
       if (hbDead) {
         runBadge.textContent = `ALGO STUCK · ${Math.round(stall.hb_age || hbAge || 0)}s`;

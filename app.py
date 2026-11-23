@@ -56,11 +56,76 @@ def auth_login_url():
         return jsonify({"ok": False, "error": str(exc)}), 500
 
 
+@app.route("/api/auth/login", methods=["GET", "POST"])
+def auth_login():
+    """
+    Dashboard Login click: clear logout flag and TOTP auto-login when .env
+    creds exist. Only returns a browser login_url as fallback.
+    """
+    try:
+        from foxtrade.auto_login import auto_login_configured, ensure_kite_session
+
+        try:
+            ENGINE.clear_manual_logout()
+        except Exception:
+            pass
+
+        if auto_login_configured():
+            status = ensure_kite_session(force_login=True)
+            try:
+                status2 = ENGINE.refresh_auth(force_profile=True)
+                if isinstance(status2, dict):
+                    status = {**status, **status2}
+                ENGINE._auth_status = status
+            except Exception:
+                pass
+            if status.get("ok"):
+                return jsonify(
+                    {
+                        **status,
+                        "ok": True,
+                        "needs_login": False,
+                        "mode": "auto",
+                        "message": "Auto-login OK",
+                    }
+                )
+            # Auto path failed — still offer manual URL so user isn't stuck
+            out = {
+                **status,
+                "ok": False,
+                "mode": "auto_failed",
+                "needs_login": True,
+                "message": status.get("reason")
+                or (status.get("auto_login_detail") or {}).get("reason")
+                or "auto_login_failed",
+            }
+            try:
+                out["login_url"] = login_url()
+            except Exception:
+                pass
+            return jsonify(out), 200
+
+        # No TOTP creds — fall back to browser Kite login
+        return jsonify(
+            {
+                "ok": True,
+                "mode": "browser",
+                "needs_login": True,
+                "login_url": login_url(),
+                "message": "Open Kite login in browser (add KITE_USER_ID/PASSWORD/TOTP to .env for one-click)",
+            }
+        )
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(exc), "mode": "error"}), 500
+
+
 @app.post("/api/auth/logout")
 def auth_logout():
-    """Clear local Kite access token and suppress unattended auto-login until Login again."""
+    """Revoke Kite token, delete local session, block auto-login until Login again."""
     try:
-        cleared = clear_access_token()
+        from kite_client import invalidate_and_clear_session
+
+        detail = invalidate_and_clear_session()
         status = {
             "ok": False,
             "needs_login": True,
@@ -70,8 +135,12 @@ def auth_logout():
             "saved_at": None,
             "login_url": None,
             "logged_out": True,
-            "cleared": cleared,
+            "cleared": bool(detail.get("cleared")),
+            "invalidated": bool(detail.get("invalidated")),
+            "auto_login": "suppressed_manual_logout",
         }
+        if detail.get("invalidate_error"):
+            status["invalidate_error"] = detail["invalidate_error"]
         try:
             status["login_url"] = login_url()
         except Exception:
@@ -1013,10 +1082,15 @@ if __name__ == "__main__":
 
     _cfg = load_config()
     stall_alert.start(
-        max_age_sec=float(_cfg.get("heartbeat_max_age_sec", 120)),
+        max_age_sec=float(_cfg.get("heartbeat_max_age_sec", 180)),
         max_data_age_sec=float(_cfg.get("zerodha_data_max_age_sec", 45)),
         voice_sec=float(_cfg.get("voice_alert_seconds", 10)),
-        restart_cooldown_sec=float(_cfg.get("engine_restart_cooldown_sec", 60)),
+        restart_cooldown_sec=float(
+            _cfg.get(
+                "stall_restart_cooldown_sec",
+                _cfg.get("engine_restart_cooldown_sec", 90),
+            )
+        ),
     )
     # Soft-recover stays on; voice muted at boot (dashboard Unmute). Stops spam.
     stall_alert.mute()

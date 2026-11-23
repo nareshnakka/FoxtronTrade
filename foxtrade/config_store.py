@@ -253,6 +253,7 @@ _DEFAULTS: dict[str, Any] = {
     "morning_token_refresh_enabled": True,
     "morning_token_refresh_hm": "09:00",  # IST; runs once in a 3-minute window
     "heartbeat_max_age_sec": 180,
+    "stall_restart_cooldown_sec": 90,
     # Position integrity — OPEN on disk is truth; no fresh entry until squared
     "block_new_while_any_open": True,
     "persist_open_across_restart": True,

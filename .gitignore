@@ -7,6 +7,9 @@ __pycache__/
 .pytest_cache/
 access_token.json
 access_token.json.*
+data/manual_logout.flag
+data/unattended.lock
+data/heartbeat.json
 *.log
 .DS_Store
 data/trades.json

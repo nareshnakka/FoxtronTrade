@@ -24,10 +24,17 @@ def beat(**extra: Any) -> None:
     with _lock:
         now = time.time()
         phase = str(extra.get("phase") or _meta.get("phase") or "")
+        force_tick = bool(extra.pop("_force_tick", False))
         # Only real loop progress resets tick_ts.
         # Do NOT count soft-restart / kick phases — that caused false "recovered"
         # then ENGINE DIED voice every ~60s while the new thread was still hung.
-        is_tick = phase in ("tick", "atm_channel", "slow_tick", "error") or (
+        is_tick = force_tick or phase in (
+            "tick",
+            "atm_channel",
+            "slow_tick",
+            "error",
+            "kite_idle",
+        ) or (
             extra.get("loop") is not None and phase not in (
                 "restarted",
                 "pulse",
@@ -55,10 +62,21 @@ def beat(**extra: Any) -> None:
             # Atomic replace — a torn write was parsed as "no heartbeat"
             # and the watchdog announced ENGINE DIED on a live loop.
             tmp = PATH.with_suffix(".json.tmp")
-            tmp.write_text(json.dumps(payload), encoding="utf-8")
+            raw = json.dumps(payload)
+            tmp.write_text(raw, encoding="utf-8")
             os.replace(tmp, PATH)
         except Exception:
             pass
+
+
+def seed_alive(*, reason: str = "seed") -> None:
+    """
+    Mark the trading loop alive RIGHT NOW.
+
+    Soft-restart MUST call this — otherwise tick_ts stays at the pre-hang
+    timestamp and the stall watchdog immediately restarts again (death spiral).
+    """
+    beat(phase="tick", loop=0, step="seed", reason=str(reason)[:80], _force_tick=True)
 
 
 def set_meta(**kwargs: Any) -> None:

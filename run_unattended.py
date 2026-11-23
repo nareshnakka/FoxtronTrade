@@ -200,10 +200,16 @@ def _ensure_login(tag: str) -> None:
         from foxtrade.auto_login import auto_login_configured, ensure_kite_session
         from foxtrade.config_store import load_config
         from foxtrade.engine import kite_idle_now
+        from kite_client import is_manual_logout
 
         # After 15:40 IST / weekend — no Zerodha login needed (reports-only).
         if kite_idle_now(load_config()):
             _log(f"[{tag}] kite idle after 15:40 — skip login (reports still served)")
+            return
+        # Mid-day Logout still blocks opportunistic login; scheduled 09:00
+        # path uses morning_logout_relogin() which clears the flag itself.
+        if is_manual_logout() and not str(tag).startswith("morning"):
+            _log(f"[{tag}] manual Logout active — skip auto-login (click Login on dashboard)")
             return
         if not auto_login_configured():
             _log(f"[{tag}] auto-login not configured — set KITE_USER_ID/PASSWORD/TOTP_SECRET in .env")

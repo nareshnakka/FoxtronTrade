@@ -32,7 +32,7 @@ from foxtrade import position_guard
 from foxtrade.runtime_store import load_runtime, save_runtime
 
 IST = ZoneInfo("Asia/Kolkata")
-BUILD_ID = "algo_cw_nw_v2_20261121a"
+BUILD_ID = "algo_cw_nw_v2_20261123_stallfix"
 
 
 def _parse_hhmm(raw: str, default_h: int, default_m: int) -> tuple[int, int]:
@@ -125,7 +125,10 @@ class TradingEngine:
         self._kite_idle: bool = False
 
     def apply_manual_logout(self, status: dict[str, Any] | None = None) -> None:
+        from kite_client import set_manual_logout
+
         self._suppress_auto_login = True
+        set_manual_logout(True)
         self._auth_status = status or {
             "ok": False,
             "needs_login": True,
@@ -134,7 +137,13 @@ class TradingEngine:
             "user_id": None,
             "saved_at": None,
             "logged_out": True,
+            "auto_login": "suppressed_manual_logout",
         }
+        # Drop live market poll so quotes aren't served from a dead session
+        try:
+            self.market.stop()
+        except Exception:
+            pass
         with self.lock:
             self.notifications.append(
                 {
@@ -145,7 +154,16 @@ class TradingEngine:
             self.notifications = self.notifications[-50:]
 
     def clear_manual_logout(self) -> None:
+        from kite_client import set_manual_logout
+
         self._suppress_auto_login = False
+        set_manual_logout(False)
+        # Resume market hub after Login (logout had stopped it)
+        try:
+            if not self.is_kite_idle():
+                self.market.start()
+        except Exception:
+            pass
 
     def is_kite_idle(self) -> bool:
         return bool(getattr(self, "_kite_idle", False))
@@ -233,7 +251,15 @@ class TradingEngine:
         self._needs_bootstrap = not idle_boot
         self._kite_idle = bool(idle_boot)
 
-        if not idle_boot:
+        logged_out = False
+        try:
+            from kite_client import is_manual_logout
+
+            logged_out = bool(is_manual_logout())
+        except Exception:
+            logged_out = False
+        # Logout / after-hours: do not spin market-hub (avoids auth hang + false data alerts)
+        if not idle_boot and not logged_out:
             self.market.start()
 
         # Restore open positions immediately (disk only — no Kite) so they are not lost
@@ -429,13 +455,22 @@ class TradingEngine:
             self._auth_status = status
             return status
 
+        from kite_client import is_manual_logout
+
+        # Survive process restart — flag file is source of truth for UI Logout
+        if is_manual_logout():
+            self._suppress_auto_login = True
+
         status = check_session(force_profile=force_profile)
         # Unattended: try TOTP auto-login when session missing/stale
         # (skipped after explicit UI Logout until Login again)
+        suppressed = bool(
+            getattr(self, "_suppress_auto_login", False) or is_manual_logout()
+        )
         if (
             status.get("needs_login")
             and self.config.get("unattended_auto_login", True)
-            and not getattr(self, "_suppress_auto_login", False)
+            and not suppressed
         ):
             try:
                 from foxtrade.auto_login import ensure_kite_session
@@ -443,8 +478,15 @@ class TradingEngine:
                 status = ensure_kite_session(force_login=True)
             except Exception as exc:  # noqa: BLE001
                 status = {**status, "auto_login": f"err:{exc}"}
-        if getattr(self, "_suppress_auto_login", False) and status.get("needs_login"):
-            status = {**status, "auto_login": "suppressed_manual_logout"}
+        if suppressed and status.get("needs_login"):
+            status = {
+                **status,
+                "ok": False,
+                "needs_login": True,
+                "logged_out": True,
+                "auto_login": "suppressed_manual_logout",
+                "reason": status.get("reason") or "logged_out",
+            }
         self._auth_status = status
         if status.get("needs_login"):
             with self.lock:
@@ -622,8 +664,21 @@ class TradingEngine:
         self.market._stop = threading.Event()
         self.market._thread = None
         self._thread = None
+        # Clear inflight flags so a hung bg thread cannot block the new loop forever
+        self._bootstrap_inflight = False
+        self._rescan_inflight = False
+        self._candles_inflight = False
+        self._macro_inflight = False
+        self._auth_inflight = False
+        self._nw_scan_inflight = False
+        self._fii_inflight = False
+        self._dual_scan_inflight = False
         self._needs_bootstrap = False
+        # Seed tick_ts BEFORE start — watchdog must not see the pre-hang age
+        hb.seed_alive(reason=f"restart:{reason}")
         self.start()
+        # Re-seed after start in case start() took a few seconds
+        hb.seed_alive(reason=f"restart_ok:{reason}")
         hb.beat(phase="restarted", reason=str(reason)[:80])
         detail = "orphaned_hung_thread" if hung else "clean"
         if hung:
@@ -1107,6 +1162,11 @@ class TradingEngine:
                         try:
                             from foxtrade.auto_login import morning_logout_relogin
 
+                            # Always clear logout + TOTP login at scheduled 09:00
+                            try:
+                                self.clear_manual_logout()
+                            except Exception:
+                                pass
                             res = morning_logout_relogin()
                             self._auth_status = res
                             with self.lock:
@@ -2003,7 +2063,8 @@ class TradingEngine:
             "auth": getattr(self, "_auth_status", None),
             "heartbeat": {
                 "age_sec": hb.age_seconds(),
-                "alive": hb.is_alive(float(cfg.get("heartbeat_max_age_sec", 90))),
+                "tick_age": hb.tick_age_seconds(),
+                "alive": hb.is_alive(float(cfg.get("heartbeat_max_age_sec", 180))),
                 **(hb.read_heartbeat() or {}),
             },
             "unattended": {

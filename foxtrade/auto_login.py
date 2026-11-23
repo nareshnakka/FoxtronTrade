@@ -58,8 +58,21 @@ def perform_auto_login(*, force: bool = False) -> dict[str, Any]:
     """
     Full unattended login. Returns {ok, reason, ...}.
     Rate-limited to once / 90s unless force=True.
+    Honors dashboard Logout (never silently re-login while flag is set).
     """
     global _last_attempt, _last_result
+    from kite_client import is_manual_logout
+
+    if is_manual_logout():
+        out = {
+            "ok": False,
+            "reason": "suppressed_manual_logout",
+            "needs_manual": True,
+            "auto_login": True,
+        }
+        _last_result = out
+        return out
+
     with _lock:
         now = time.time()
         if not force and _last_result.get("ok") and now - _last_attempt < 90:
@@ -202,8 +215,10 @@ def perform_auto_login(*, force: bool = False) -> dict[str, Any]:
 def ensure_kite_session(*, force_login: bool = False) -> dict[str, Any]:
     """
     Soft check; if stale/missing and auto-login configured, renew token.
-    Never raises.
+    Never raises. Honors dashboard Logout (manual_logout flag).
     """
+    from kite_client import is_manual_logout
+
     try:
         status = check_session(force_profile=True)
     except Exception as exc:  # noqa: BLE001
@@ -211,6 +226,16 @@ def ensure_kite_session(*, force_login: bool = False) -> dict[str, Any]:
 
     if status.get("ok") and not force_login:
         return {**status, "auto_login": "not_needed"}
+
+    if is_manual_logout():
+        return {
+            **status,
+            "ok": False,
+            "needs_login": True,
+            "reason": status.get("reason") or "logged_out",
+            "auto_login": "suppressed_manual_logout",
+            "logged_out": True,
+        }
 
     if not auto_login_configured():
         return {
@@ -237,11 +262,20 @@ def ensure_kite_session(*, force_login: bool = False) -> dict[str, Any]:
 
 def morning_logout_relogin() -> dict[str, Any]:
     """
-    Hard logout (delete access_token.json) then force TOTP login.
-    Used once every weekday morning so the session is always fresh.
+    Hard wipe access_token.json then force TOTP login.
+
+    Used once every weekday at ~09:00 IST so the session is always fresh.
+    Clears the dashboard Logout flag — scheduled morning login is intentional
+    and must not stay blocked overnight.
     Never raises.
     """
-    from kite_client import clear_access_token, load_token_meta
+    from kite_client import clear_access_token, load_token_meta, set_manual_logout
+
+    # 09:00 scheduled refresh always wins over yesterday's Logout click
+    try:
+        set_manual_logout(False)
+    except Exception:
+        pass
 
     prev = (load_token_meta() or {}).get("saved_at")
     cleared = False

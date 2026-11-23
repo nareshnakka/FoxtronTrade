@@ -15,6 +15,8 @@ from kiteconnect import KiteConnect
 
 ROOT = Path(__file__).resolve().parent
 TOKEN_FILE = ROOT / "access_token.json"
+# Durable UI Logout flag — blocks TOTP auto-login until Login is clicked again
+MANUAL_LOGOUT_FLAG = ROOT / "data" / "manual_logout.flag"
 IST = ZoneInfo("Asia/Kolkata")
 
 # Kite order API checks client IP against allowlist. Prefer IPv4 so a listed
@@ -83,6 +85,56 @@ def clear_access_token() -> bool:
         return True
     except OSError:
         return False
+
+
+def is_manual_logout() -> bool:
+    """True after dashboard Logout until Login / callback clears the flag."""
+    try:
+        return MANUAL_LOGOUT_FLAG.exists()
+    except Exception:
+        return False
+
+
+def set_manual_logout(active: bool) -> None:
+    """Persist / clear the manual-logout gate for auto-login paths."""
+    try:
+        MANUAL_LOGOUT_FLAG.parent.mkdir(parents=True, exist_ok=True)
+        if active:
+            MANUAL_LOGOUT_FLAG.write_text(
+                datetime.now(IST).isoformat(), encoding="utf-8"
+            )
+        elif MANUAL_LOGOUT_FLAG.exists():
+            MANUAL_LOGOUT_FLAG.unlink(missing_ok=True)  # type: ignore[call-arg]
+    except Exception:
+        pass
+
+
+def invalidate_and_clear_session() -> dict[str, Any]:
+    """
+    Real logout: revoke token at Zerodha (best-effort), delete local file,
+    and arm manual-logout so TOTP auto-login cannot silently restore the session.
+    """
+    out: dict[str, Any] = {
+        "invalidated": False,
+        "cleared": False,
+        "manual_logout": True,
+    }
+    token = None
+    try:
+        token = load_access_token()
+    except Exception:
+        token = None
+    if token:
+        try:
+            kite = new_kite()
+            kite.set_access_token(token)
+            kite.invalidate_access_token()
+            out["invalidated"] = True
+        except Exception as exc:  # noqa: BLE001
+            out["invalidate_error"] = str(exc)
+    out["cleared"] = bool(clear_access_token())
+    set_manual_logout(True)
+    return out
 
 
 def load_access_token() -> str | None:
