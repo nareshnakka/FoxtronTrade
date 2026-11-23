@@ -19,7 +19,6 @@ from typing import Any
 from urllib.parse import parse_qs, urlparse
 
 import requests
-from dotenv import load_dotenv
 
 from kite_client import (
     ROOT,
@@ -34,11 +33,21 @@ _last_attempt = 0.0
 _last_result: dict[str, Any] = {}
 
 
+def _strip_env(val: str | None) -> str:
+    s = (val or "").strip()
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in ("'", '"'):
+        s = s[1:-1].strip()
+    return s
+
+
 def _creds() -> dict[str, str] | None:
-    load_dotenv(ROOT / ".env")
-    uid = os.getenv("KITE_USER_ID", "").strip()
-    pwd = os.getenv("KITE_PASSWORD", "").strip()
-    totp = os.getenv("KITE_TOTP_SECRET", "").strip().replace(" ", "")
+    # override=True + utf-8-sig: copied .env must win; Notepad BOM must not break keys
+    from kite_client import load_dotenv_files
+
+    load_dotenv_files()
+    uid = _strip_env(os.getenv("KITE_USER_ID"))
+    pwd = _strip_env(os.getenv("KITE_PASSWORD"))
+    totp = _strip_env(os.getenv("KITE_TOTP_SECRET")).replace(" ", "")
     if not uid or not pwd or not totp:
         return None
     return {"user_id": uid, "password": pwd, "totp_secret": totp}

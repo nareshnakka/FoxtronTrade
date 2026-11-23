@@ -43,6 +43,49 @@ def auth_status():
     return jsonify(status)
 
 
+@app.get("/api/auth/diag")
+def auth_diag():
+    """Safe diagnostics for Login/Logout troubleshooting (no secrets)."""
+    try:
+        import os
+        from pathlib import Path
+
+        from foxtrade.auto_login import auto_login_configured
+        from foxtrade.engine import BUILD_ID
+        from kite_client import (
+            MANUAL_LOGOUT_FLAG,
+            ROOT,
+            TOKEN_FILE,
+            is_manual_logout,
+            load_dotenv_files,
+            load_token_meta,
+        )
+
+        env_path = load_dotenv_files()
+        meta = load_token_meta() or {}
+        return jsonify(
+            {
+                "ok": True,
+                "build_id": BUILD_ID,
+                "env_file_exists": Path(env_path).is_file(),
+                "env_path": str(env_path),
+                "auto_login_configured": bool(auto_login_configured()),
+                "has_api_key": bool((os.getenv("KITE_API_KEY") or "").strip()),
+                "has_api_secret": bool((os.getenv("KITE_API_SECRET") or "").strip()),
+                "has_user_id": bool((os.getenv("KITE_USER_ID") or "").strip()),
+                "has_password": bool((os.getenv("KITE_PASSWORD") or "").strip()),
+                "has_totp": bool((os.getenv("KITE_TOTP_SECRET") or "").strip()),
+                "manual_logout": bool(is_manual_logout()),
+                "manual_logout_flag": str(MANUAL_LOGOUT_FLAG),
+                "has_token": TOKEN_FILE.is_file(),
+                "token_saved_at": meta.get("saved_at"),
+                "root": str(ROOT),
+            }
+        )
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
 @app.get("/api/auth/login_url")
 def auth_login_url():
     try:

@@ -32,7 +32,7 @@ from foxtrade import position_guard
 from foxtrade.runtime_store import load_runtime, save_runtime
 
 IST = ZoneInfo("Asia/Kolkata")
-BUILD_ID = "algo_cw_nw_v2_20261123_stallfix"
+BUILD_ID = "algo_cw_nw_v2_20261123_authfix"
 
 
 def _parse_hhmm(raw: str, default_h: int, default_m: int) -> tuple[int, int]:
@@ -455,11 +455,16 @@ class TradingEngine:
             self._auth_status = status
             return status
 
-        from kite_client import is_manual_logout
+        from kite_client import clear_access_token, is_manual_logout
 
         # Survive process restart — flag file is source of truth for UI Logout
         if is_manual_logout():
             self._suppress_auto_login = True
+            # Drop any leftover token so force_profile=False cannot look "logged in"
+            try:
+                clear_access_token()
+            except Exception:
+                pass
 
         status = check_session(force_profile=force_profile)
         # Unattended: try TOTP auto-login when session missing/stale
@@ -478,14 +483,17 @@ class TradingEngine:
                 status = ensure_kite_session(force_login=True)
             except Exception as exc:  # noqa: BLE001
                 status = {**status, "auto_login": f"err:{exc}"}
-        if suppressed and status.get("needs_login"):
+        # Manual logout ALWAYS wins the UI — even if a stale token was present
+        if suppressed:
             status = {
                 **status,
                 "ok": False,
                 "needs_login": True,
                 "logged_out": True,
                 "auto_login": "suppressed_manual_logout",
-                "reason": status.get("reason") or "logged_out",
+                "reason": "logged_out",
+                "user_name": None,
+                "user_id": None,
             }
         self._auth_status = status
         if status.get("needs_login"):

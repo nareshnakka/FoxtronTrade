@@ -2333,12 +2333,15 @@
           try { await tick(); } catch (_) {}
           return;
         }
+        if (j.mode === "browser") {
+          showToast("No TOTP in .env — opening Kite browser login…");
+        }
         // Auto failed or not configured — open browser only if we have a URL
         if (j.login_url) {
           window.open(j.login_url, "_blank", "noopener");
           showToast(
             j.mode === "auto_failed"
-              ? "Auto-login failed — complete Kite login in the new tab…"
+              ? ("Auto-login failed: " + (j.message || j.reason || "error") + " — use the new tab")
               : "Complete Kite login in the new tab…"
           );
           return;
@@ -2359,22 +2362,34 @@
         return;
       }
       try {
-        const r = await fetch("/api/auth/logout", { method: "POST" });
-        const j = await r.json();
-        if (j.error) {
+        const r = await fetch("/api/auth/logout", {
+          method: "POST",
+          headers: { Accept: "application/json" },
+        });
+        const raw = await r.text();
+        let j = null;
+        try {
+          j = JSON.parse(raw);
+        } catch (_) {
+          showToast("Logout failed — Stop then Start (server still on old build)");
+          return;
+        }
+        if (j.error && j.ok !== false && !j.logged_out) {
           showToast("Logout failed: " + j.error);
           return;
         }
-        applyAuth({ auth: j });
+        applyAuth({ auth: { ...j, ok: false, needs_login: true, logged_out: true } });
         const bits = [];
         if (j.invalidated) bits.push("revoked at Zerodha");
         else if (j.invalidate_error) bits.push("local clear (API revoke failed)");
         if (j.cleared) bits.push("token file removed");
+        if (j.manual_logout || j.auto_login === "suppressed_manual_logout") {
+          bits.push("auto-login blocked");
+        }
         showToast(
           "Logged out" + (bits.length ? " — " + bits.join(", ") : "") +
-          " · auto-login off until Login"
+          " · click Login when ready"
         );
-        // Force a state refresh so badge/banner stay logged-out
         try { await tick(); } catch (_) {}
       } catch (err) {
         showToast("Logout error: " + err);

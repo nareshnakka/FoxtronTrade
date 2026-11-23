@@ -46,11 +46,32 @@ def prefer_ipv4() -> None:
 prefer_ipv4()
 
 
+def _strip_env(val: str | None) -> str:
+    """Trim whitespace and optional surrounding quotes from .env values."""
+    s = (val or "").strip()
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in ("'", '"'):
+        s = s[1:-1].strip()
+    return s
+
+
+def load_dotenv_files() -> Path:
+    """
+    Load project .env with override=True so a copied .env always wins over
+    empty/stale process env vars. Strips UTF-8 BOM (Notepad copy artifact).
+    """
+    path = ROOT / ".env"
+    # encoding_errors ignore keeps BOM from poisoning the first key name
+    load_dotenv(path, override=True, encoding="utf-8-sig")
+    return path
+
+
 def load_settings() -> dict[str, str]:
-    load_dotenv(ROOT / ".env")
-    api_key = os.getenv("KITE_API_KEY", "").strip()
-    api_secret = os.getenv("KITE_API_SECRET", "").strip()
-    redirect_url = os.getenv("KITE_REDIRECT_URL", "http://127.0.0.1:5050/callback").strip()
+    load_dotenv_files()
+    api_key = _strip_env(os.getenv("KITE_API_KEY"))
+    api_secret = _strip_env(os.getenv("KITE_API_SECRET"))
+    redirect_url = _strip_env(
+        os.getenv("KITE_REDIRECT_URL", "http://127.0.0.1:5050/callback")
+    ) or "http://127.0.0.1:5050/callback"
     if not api_key or not api_secret:
         raise SystemExit(
             "Missing KITE_API_KEY / KITE_API_SECRET. "
@@ -111,14 +132,16 @@ def set_manual_logout(active: bool) -> None:
 
 def invalidate_and_clear_session() -> dict[str, Any]:
     """
-    Real logout: revoke token at Zerodha (best-effort), delete local file,
-    and arm manual-logout so TOTP auto-login cannot silently restore the session.
+    Real logout: arm manual-logout FIRST (so auto-login cannot race back in),
+    then revoke at Zerodha (best-effort) and delete the local token file.
     """
     out: dict[str, Any] = {
         "invalidated": False,
         "cleared": False,
         "manual_logout": True,
     }
+    # Gate FIRST — engine/unattended must not restore the session mid-logout
+    set_manual_logout(True)
     token = None
     try:
         token = load_access_token()
@@ -133,6 +156,7 @@ def invalidate_and_clear_session() -> dict[str, Any]:
         except Exception as exc:  # noqa: BLE001
             out["invalidate_error"] = str(exc)
     out["cleared"] = bool(clear_access_token())
+    # Ensure flag still present even if clear_access_token raced something
     set_manual_logout(True)
     return out
 
