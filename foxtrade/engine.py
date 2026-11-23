@@ -32,7 +32,7 @@ from foxtrade import position_guard
 from foxtrade.runtime_store import load_runtime, save_runtime
 
 IST = ZoneInfo("Asia/Kolkata")
-BUILD_ID = "algo_cw_nw_v2_20261123_authfix"
+BUILD_ID = "algo_cw_nw_v2_20261123_authfix2"
 
 
 def _parse_hhmm(raw: str, default_h: int, default_m: int) -> tuple[int, int]:

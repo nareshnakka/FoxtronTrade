@@ -494,6 +494,8 @@
       <button id="liveBtn" class="ok">OFF</button>
     </div>
     <button id="settingsBtn">Settings</button>
+    <span id="buildBadge" class="badge" title="Code build — must show authfix2 after Update">BUILD —</span>
+    <button id="hdrLoginBtn" class="login" type="button" title="TOTP auto-login from .env">Login</button>
     <button id="logoutBtn" class="danger" title="Clear local Kite session (stops auto-login until you Login again)">Logout</button>
     <button id="chainFilterBtn" title="Live option chain (Zerodha-style) from capture DB">Option chain</button>
     <button id="atmPremBtn" title="Live ATM CE/PE premium chart">ATM CE/PE</button>
@@ -2485,13 +2487,21 @@
       const banner = document.getElementById("authBanner");
       const badge = document.getElementById("authBadge");
       const logoutBtn = document.getElementById("logoutBtn");
+      const hdrLogin = document.getElementById("hdrLoginBtn");
+      const buildBadge = document.getElementById("buildBadge");
       const idleOn = !!(st.kite_idle && st.kite_idle.active);
-      const need = !idleOn && (!!auth.needs_login || auth.ok === false);
+      const need = !idleOn && (!!auth.needs_login || auth.ok === false || !!auth.logged_out);
       const loginWhen = formatTokenCreated(auth.saved_at);
       const loginBit = loginWhen ? ` · ${loginWhen}` : "";
       const loginTitle = auth.saved_at
         ? `Last Kite login / token: ${auth.saved_at}`
         : "No saved_at on token — login once to stamp it";
+      if (buildBadge && st.build_id) {
+        const bid = String(st.build_id);
+        buildBadge.textContent = bid.includes("authfix") ? "BUILD OK" : bid.slice(-18);
+        buildBadge.title = bid;
+        buildBadge.className = "badge " + (bid.includes("authfix2") ? "ok" : "warn");
+      }
       if (badge) {
         if (idleOn) {
           badge.textContent = `AUTH IDLE${loginBit}`;
@@ -2508,6 +2518,10 @@
           badge.title = loginTitle;
         }
       }
+      if (hdrLogin) {
+        hdrLogin.style.display = need ? "" : "none";
+        hdrLogin.disabled = !need;
+      }
       if (logoutBtn) {
         logoutBtn.style.display = need || idleOn ? "none" : "";
         logoutBtn.disabled = !!need || idleOn;
@@ -2520,6 +2534,8 @@
     }
 
     document.getElementById("authLoginBtn").onclick = () => openKiteLogin();
+    const hdrLoginEl = document.getElementById("hdrLoginBtn");
+    if (hdrLoginEl) hdrLoginEl.onclick = () => openKiteLogin();
     const logoutBtnEl = document.getElementById("logoutBtn");
     if (logoutBtnEl) logoutBtnEl.onclick = () => logoutKite();
     const muteBtn = document.getElementById("linkAlertMuteBtn");

@@ -87,10 +87,23 @@ if exist "%PY%" (
   )
 )
 
+REM Allow Login after update — prior Logout flag must not block the new build.
+if exist "%ROOT%data\manual_logout.flag" (
+  echo Clearing stuck Logout flag from previous session...
+  del /f /q "%ROOT%data\manual_logout.flag" >nul 2>&1
+)
+
 echo.
 echo Update complete.
-echo   Next: Start.bat
+echo   Next: Stop.bat ^(if running^) then Start.bat
+echo   Dashboard must show BUILD OK / build_id ...authfix2
+echo   .env is local only — confirm it sits next to app.py
 echo.
+if exist "%PY%" (
+  echo Auth check:
+  "%PY%" "%ROOT%tools_auth_fix.py"
+  echo.
+)
 
 if "%WAS_RUNNING%"=="1" (
   choice /C YN /M "Start now"

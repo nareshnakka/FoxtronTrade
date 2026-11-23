@@ -107,7 +107,14 @@ def auth_login():
     """
     try:
         from foxtrade.auto_login import auto_login_configured, ensure_kite_session
+        from kite_client import set_manual_logout
 
+        # Clear flag at both layers — must happen before any refresh_auth
+        # (refresh_auth wipes the token while the logout flag is set).
+        try:
+            set_manual_logout(False)
+        except Exception:
+            pass
         try:
             ENGINE.clear_manual_logout()
         except Exception:
@@ -115,32 +122,35 @@ def auth_login():
 
         if auto_login_configured():
             status = ensure_kite_session(force_login=True)
-            try:
-                status2 = ENGINE.refresh_auth(force_profile=True)
-                if isinstance(status2, dict):
-                    status = {**status, **status2}
-                ENGINE._auth_status = status
-            except Exception:
-                pass
             if status.get("ok"):
-                return jsonify(
-                    {
-                        **status,
-                        "ok": True,
-                        "needs_login": False,
-                        "mode": "auto",
-                        "message": "Auto-login OK",
-                    }
-                )
+                # Trust the fresh login — do not re-enter refresh_auth while
+                # a stale logout flag could still clear the new token.
+                try:
+                    set_manual_logout(False)
+                    ENGINE._suppress_auto_login = False
+                except Exception:
+                    pass
+                status = {
+                    **status,
+                    "ok": True,
+                    "needs_login": False,
+                    "logged_out": False,
+                    "mode": "auto",
+                    "message": "Auto-login OK",
+                }
+                ENGINE._auth_status = status
+                return jsonify(status)
             # Auto path failed — still offer manual URL so user isn't stuck
+            detail = status.get("auto_login_detail") or {}
             out = {
                 **status,
                 "ok": False,
                 "mode": "auto_failed",
                 "needs_login": True,
                 "message": status.get("reason")
-                or (status.get("auto_login_detail") or {}).get("reason")
+                or detail.get("reason")
                 or "auto_login_failed",
+                "auto_login_configured": True,
             }
             try:
                 out["login_url"] = login_url()
@@ -154,8 +164,9 @@ def auth_login():
                 "ok": True,
                 "mode": "browser",
                 "needs_login": True,
+                "auto_login_configured": False,
                 "login_url": login_url(),
-                "message": "Open Kite login in browser (add KITE_USER_ID/PASSWORD/TOTP to .env for one-click)",
+                "message": "Open Kite login in browser (.env missing KITE_USER_ID/PASSWORD/TOTP)",
             }
         )
     except Exception as exc:  # noqa: BLE001
