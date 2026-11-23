@@ -233,3 +233,33 @@ def ensure_kite_session(*, force_login: bool = False) -> dict[str, Any]:
         "auto_login": "failed",
         "auto_login_detail": result,
     }
+
+
+def morning_logout_relogin() -> dict[str, Any]:
+    """
+    Hard logout (delete access_token.json) then force TOTP login.
+    Used once every weekday morning so the session is always fresh.
+    Never raises.
+    """
+    from kite_client import clear_access_token, load_token_meta
+
+    prev = (load_token_meta() or {}).get("saved_at")
+    cleared = False
+    try:
+        cleared = bool(clear_access_token())
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "ok": False,
+            "auto_login": "logout_failed",
+            "reason": f"clear_token:{exc}",
+            "prev_saved_at": prev,
+        }
+
+    status = ensure_kite_session(force_login=True)
+    return {
+        **status,
+        "morning_refresh": True,
+        "token_cleared": cleared,
+        "prev_saved_at": prev,
+        "new_saved_at": status.get("saved_at"),
+    }

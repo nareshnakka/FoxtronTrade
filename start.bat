@@ -84,19 +84,31 @@ exit /b 1
 
 
 :is_running
+REM Prefer Python status (clears stale-lock false positives); exit 1 = running
+if exist "%ROOT%.venv\Scripts\python.exe" (
+  "%ROOT%.venv\Scripts\python.exe" "%ROOT%tools_stop_start.py" status >nul 2>&1
+  exit /b %ERRORLEVEL%
+)
 powershell -NoProfile -Command ^
   "$hit=$false; " ^
   "Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" -EA SilentlyContinue | ForEach-Object { " ^
-  "  if ($_.CommandLine -and ($_.CommandLine -like '*run_unattended.py*' -or $_.CommandLine -like '*app.py*')) { $hit=$true } " ^
+  "  if ($_.CommandLine -and ($_.CommandLine -like '*run_unattended.py*' -or $_.CommandLine -like '*\\app.py*' -or $_.CommandLine -like '* app.py*')) { $hit=$true } " ^
   "}; " ^
   "if (-not $hit) { " ^
-  "  foreach ($p in 5050,5000) { if (Get-NetTCPConnection -LocalPort $p -EA SilentlyContinue) { $hit=$true } } " ^
+  "  foreach ($p in 5050,5000) { " ^
+  "    if (Get-NetTCPConnection -LocalPort $p -State Listen -EA SilentlyContinue) { $hit=$true } " ^
+  "  } " ^
   "}; " ^
   "if ($hit) { exit 1 } else { exit 0 }"
 exit /b %ERRORLEVEL%
 
 
 :stop_ports
-powershell -NoProfile -Command ^
-  "foreach ($p in 5050,5000) { Get-NetTCPConnection -LocalPort $p -EA SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -EA SilentlyContinue } }"
+if exist "%ROOT%.venv\Scripts\python.exe" (
+  "%ROOT%.venv\Scripts\python.exe" "%ROOT%tools_stop_start.py" stop
+) else (
+  powershell -NoProfile -Command ^
+    "Get-NetTCPConnection -LocalPort 5050,5000 -State Listen -EA SilentlyContinue | ForEach-Object { taskkill /F /T /PID $_.OwningProcess 2>$null }; " ^
+    "if (Test-Path '%ROOT%data\unattended.lock') { Remove-Item -Force '%ROOT%data\unattended.lock' }"
+)
 exit /b 0

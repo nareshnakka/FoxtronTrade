@@ -683,6 +683,138 @@ class OptionChainDB:
             finally:
                 conn.close()
 
+    def strike_premium_series(
+        self,
+        *,
+        week: str,
+        expiry: str,
+        legs: list[dict[str, Any]],
+        day: str | None = None,
+        time_from: str | None = None,
+        time_to: str | None = None,
+        max_legs: int = 6,
+        resample: str = "1m",
+    ) -> dict[str, Any]:
+        """
+        LTP history for selected CE/PE strikes, scoped to one expiry week only.
+
+        Filters ltp_legs by week + expiry so the same strike number from another
+        expiry never mixes in. Optional day/time window; default = all days for
+        that expiry in the DB. resample=1m aggregates to last LTP per minute.
+        """
+        week = week if week in ("current", "next") else "current"
+        expiry = str(expiry or "").strip()[:10]
+        if not expiry:
+            return {"ok": False, "error": "expiry required", "series": []}
+        cleaned: list[tuple[str, int]] = []
+        seen: set[tuple[str, int]] = set()
+        for raw in legs or []:
+            side = str(raw.get("side") or "").upper()
+            if side not in ("CE", "PE"):
+                continue
+            try:
+                strike = int(raw.get("strike"))
+            except Exception:
+                continue
+            key = (side, strike)
+            if key in seen:
+                continue
+            seen.add(key)
+            cleaned.append(key)
+            if len(cleaned) >= max(1, int(max_legs)):
+                break
+        if not cleaned:
+            return {
+                "ok": False,
+                "error": "no valid legs (need side+strike, max 6)",
+                "series": [],
+                "week": week,
+                "expiry": expiry,
+            }
+
+        with self._lock:
+            conn = self._connect()
+            try:
+                clauses = " OR ".join(
+                    ["(side=? AND strike=?)"] * len(cleaned)
+                )
+                args: list[Any] = [week, expiry]
+                for side, strike in cleaned:
+                    args.extend([side, strike])
+                sql = (
+                    "SELECT ts, strike, side, symbol, ltp FROM ltp_legs "
+                    f"WHERE week=? AND expiry=? AND ({clauses})"
+                )
+                if day:
+                    sql += " AND substr(ts,1,10)=?"
+                    args.append(str(day)[:10])
+                if time_from:
+                    sql += " AND substr(ts, 12, 8) >= ?"
+                    args.append(_norm_hms(time_from))
+                if time_to:
+                    sql += " AND substr(ts, 12, 8) <= ?"
+                    args.append(_norm_hms(time_to))
+                sql += " ORDER BY ts ASC"
+                rows = conn.execute(sql, args).fetchall()
+
+                # bucket: (side, strike) -> minute -> last ltp + symbol
+                buckets: dict[tuple[str, int], dict[str, tuple[float, str | None]]] = {
+                    k: {} for k in cleaned
+                }
+                symbols: dict[tuple[str, int], str | None] = {k: None for k in cleaned}
+                days_seen: set[str] = set()
+                for ts, strike, side, symbol, ltp in rows:
+                    if ltp is None:
+                        continue
+                    key = (str(side), int(strike))
+                    if key not in buckets:
+                        continue
+                    ts_s = str(ts)
+                    days_seen.add(ts_s[:10])
+                    if resample == "1m":
+                        bucket_t = ts_s[:16]  # YYYY-MM-DDTHH:MM
+                    else:
+                        bucket_t = ts_s[:19]
+                    buckets[key][bucket_t] = (float(ltp), str(symbol) if symbol else None)
+                    if symbol:
+                        symbols[key] = str(symbol)
+
+                series: list[dict[str, Any]] = []
+                for side, strike in cleaned:
+                    pts_map = buckets[(side, strike)]
+                    points = [
+                        {
+                            "t": t,
+                            "time": t[11:16] if "T" in t else t,
+                            "v": round(v, 2),
+                        }
+                        for t, (v, _sym) in sorted(pts_map.items())
+                    ]
+                    series.append(
+                        {
+                            "id": f"{side}:{strike}",
+                            "side": side,
+                            "strike": strike,
+                            "symbol": symbols[(side, strike)],
+                            "count": len(points),
+                            "points": points,
+                            "channel": _fit_strike_channel(points),
+                        }
+                    )
+
+                return {
+                    "ok": True,
+                    "week": week,
+                    "expiry": expiry,
+                    "day": day,
+                    "resample": resample,
+                    "source": "option_chain_live",
+                    "days": sorted(days_seen),
+                    "series": series,
+                }
+            finally:
+                conn.close()
+
 
 def _norm_hms(v: str) -> str:
     s = str(v or "").strip()
@@ -691,6 +823,49 @@ def _norm_hms(v: str) -> str:
     if len(s) >= 8:
         return s[:8]
     return s
+
+
+def _fit_strike_channel(points: list[dict[str, Any]]) -> dict[str, Any] | None:
+    """Parallel premium channel (hi/lo rails) for a strike LTP series."""
+    if len(points) < 10:
+        return None
+    try:
+        from foxtrade.breakout_trendline import fit_premium_channel, trendline_value
+
+        px = [float(p["v"]) for p in points]
+        break_i = len(px) - 1
+        tol = max(0.5, abs(px[-1]) * 0.015)
+        ch = fit_premium_channel(
+            px,
+            break_i=break_i,
+            lookback=min(80, max(12, break_i)),
+            from_start=True,
+            tol=tol,
+        )
+        up = ch.get("up")  # support / lower
+        down = ch.get("down")  # resistance / upper
+        if not up and not down:
+            return None
+        hi_pts: list[dict[str, Any]] = []
+        lo_pts: list[dict[str, Any]] = []
+        for i, p in enumerate(points):
+            hi = trendline_value(down, i)
+            lo = trendline_value(up, i)
+            if hi is not None:
+                hi_pts.append({"t": p["t"], "v": round(float(hi), 2)})
+            if lo is not None:
+                lo_pts.append({"t": p["t"], "v": round(float(lo), 2)})
+        if len(hi_pts) < 2 and len(lo_pts) < 2:
+            return None
+        return {
+            "hi": hi_pts,
+            "lo": lo_pts,
+            "parallel": bool(ch.get("parallel")),
+            "width": round(float(ch["width"]), 2) if ch.get("width") is not None else None,
+            "slope": round(float(ch["slope"]), 5) if ch.get("slope") is not None else None,
+        }
+    except Exception:
+        return None
 
 
 def _moneyness_label(side: str, strike: int, atm: int) -> str:

@@ -497,13 +497,13 @@
     <button id="logoutBtn" class="danger" title="Clear local Kite session (stops auto-login until you Login again)">Logout</button>
     <button id="chainFilterBtn" title="Live option chain (Zerodha-style) from capture DB">Option chain</button>
     <button id="atmPremBtn" title="Live ATM CE/PE premium chart">ATM CE/PE</button>
+    <button id="labBtn" title="Train Lab — backtest / promote from captured history">Train Lab</button>
     <button id="reportsBtn">Reports</button>
   </header>
   <div class="activity-bar" id="activityBar">
     <span class="headline" id="actHeadline">Algo —</span>
-    <span class="act" id="actA1">A1 —</span>
-    <span class="act" id="actA2">Convergence CW —</span>
-    <span class="act" id="actA2nw">Convergence NW —</span>
+    <span class="act" id="actA2">Algo-CW —</span>
+    <span class="act" id="actA2nw">Algo-NW —</span>
     <span class="act" id="actOpen">Open MTM —</span>
     <span class="act" id="actInvested">Capital used —</span>
     <div class="criteria-live" id="criteriaLive" title="Matching criteria · 1-line banner · updates every ~3s">
@@ -519,34 +519,34 @@
       <div class="book-top">
         <section class="panel" data-panel="conv">
           <h2>
-            <span class="left"><span>Algo1 — Current week</span><span id="convmsg" class="meta"></span></span>
+            <span class="left"><span>Algo-CW — Current week 70–77 @ 1.45×</span><span id="convmsg" class="meta"></span></span>
             <button type="button" class="max-btn" data-max="conv" title="Maximize">Maximize</button>
           </h2>
           <div class="pair-bar" id="convPair">Waiting for convergence scan…</div>
           <div class="pairs-strip" id="convPairs"></div>
-          <div id="chartConv" class="chart"><span class="chart-hint">Yellow long-dot = convergence range · light-red short-dot = CE channel · light-green short-dot = PE channel · PE tag shows LTP/±₹</span><div class="pe-live-tag" id="peLiveTag"></div><div class="chart-empty" id="convEmpty">Waiting for ATM + diagonal merge.<br>Then locks highest near-equal premiums in band and plots them.</div></div>
+          <div id="chartConv" class="chart"><span class="chart-hint">Yellow long-dot = convergence range · light-red / light-green dotted = CE/PE channels (1m fit, same as option-chain) · PE tag shows LTP/±₹</span><div class="pe-live-tag" id="peLiveTag"></div><div class="chart-empty" id="convEmpty">Waiting for ATM + diagonal merge.<br>Then locks highest near-equal premiums in band and plots them.</div></div>
         </section>
         <section class="panel" data-panel="alogcw">
           <h2>
             <span class="left">
-              <span>CW live log</span>
+              <span>Algo-CW live log</span>
               <span class="meta" id="alogMetaCw">—</span>
             </span>
             <button type="button" class="max-btn" data-max="alogcw" title="Maximize">Maximize</button>
           </h2>
-          <div class="alog" id="algoLogCw"><div class="empty">Waiting for CW ticks…</div></div>
+          <div class="alog" id="algoLogCw"><div class="empty">Waiting for Algo-CW ticks…</div></div>
         </section>
       </div>
       <section class="panel" data-panel="trades">
         <h2>
           <span class="left">
-            <span>Entries / Live P&amp;L — Algo1 (Current week)</span>
+            <span>Entries / Live P&amp;L — Algo-CW</span>
             <span class="meta" id="entryModeTabs" style="margin-left:10px;display:inline-flex;gap:6px">
               <button type="button" class="ok" data-emode="all" id="emodeAll">All</button>
               <button type="button" data-emode="paper" id="emodePaper">Paper</button>
               <button type="button" data-emode="live" id="emodeLive">Live</button>
             </span>
-            <span class="meta" id="entriesMeta">algo2 today</span>
+            <span class="meta" id="entriesMeta">algo_cw today</span>
           </span>
           <button type="button" class="max-btn" data-max="trades" title="Maximize">Maximize</button>
         </h2>
@@ -574,7 +574,7 @@
       <div class="book-top">
         <section class="panel" data-panel="convnw">
           <h2>
-            <span class="left"><span>Algo2 — Next week 46–54 @ 1.70×</span><span id="convnwmsg" class="meta"></span></span>
+            <span class="left"><span>Algo-NW 46–54 @ 1.70×</span><span id="convnwmsg" class="meta"></span></span>
             <button type="button" class="max-btn" data-max="convnw" title="Maximize">Maximize</button>
           </h2>
           <div class="pair-bar" id="convnwPair">Waiting for next-week scan…</div>
@@ -584,19 +584,19 @@
         <section class="panel" data-panel="alognw">
           <h2>
             <span class="left">
-              <span>NW live log</span>
+              <span>Algo-NW live log</span>
               <span class="meta" id="alogMetaNw">—</span>
             </span>
             <button type="button" class="max-btn" data-max="alognw" title="Maximize">Maximize</button>
           </h2>
-          <div class="alog" id="algoLogNw"><div class="empty">Waiting for NW ticks…</div></div>
+          <div class="alog" id="algoLogNw"><div class="empty">Waiting for Algo-NW ticks…</div></div>
         </section>
       </div>
       <section class="panel" data-panel="tradesnw">
         <h2>
           <span class="left">
-            <span>Entries / Live P&amp;L — Algo2 (Next week)</span>
-            <span class="meta" id="entriesMetaNw">algo2nw today</span>
+            <span>Entries / Live P&amp;L — Algo-NW</span>
+            <span class="meta" id="entriesMetaNw">algo_nw today</span>
           </span>
           <button type="button" class="max-btn" data-max="tradesnw" title="Maximize">Maximize</button>
         </h2>
@@ -632,19 +632,13 @@
     <div class="modal">
       <h3 style="margin-top:0">Capital by Algo</h3>
       <p class="meta" style="margin:0 0 10px">Each book sizes lots from its own capital × deploy. Shared fallback used if a field is blank.</p>
-      <label>Algo1 (FastTrack) capital ₹
-        <input id="s_a1cap" type="number" min="25000" max="5000000" step="5000" />
-      </label>
-      <label>Algo1 deploy %
-        <input id="s_a1dep" type="number" min="50" max="100" step="1" />
-      </label>
-      <label>Algo2 (Convergence CW) capital ₹
+      <label>Algo-CW capital ₹
         <input id="s_a2cap" type="number" min="25000" max="5000000" step="5000" />
       </label>
-      <label>Algo2 deploy %
+      <label>Algo-CW deploy %
         <input id="s_a2dep" type="number" min="50" max="100" step="1" />
       </label>
-      <label>Next-Week Convergence capital ₹
+      <label>Algo-NW capital ₹
         <input id="s_a2nwcap" type="number" min="25000" max="5000000" step="5000" />
       </label>
       <label>Next-Week deploy %
@@ -658,9 +652,14 @@
       <p class="meta" id="s_lotsHint" style="margin:4px 0 10px">Qty = lots × lot size (Nifty 75) when not sizing from capital.</p>
       <label>Max trades / day <input id="s_max" type="number" min="1" max="10" /></label>
       <h4>ALGOS</h4>
-      <p class="meta" style="margin:0 0 6px">Convergence books buy CE+PE on merge; NW is a separate 46–54 @ 1.70× book.</p>
-      <label class="tog">Convergence Algo (current week) <input id="s_a2en" type="checkbox" /></label>
-      <label class="tog">Convergence Next-Week (46–54 @ 1.70×) <input id="s_a2nwen" type="checkbox" /></label>
+      <p class="meta" style="margin:0 0 6px">Algo-CW / Algo-NW buy CE+PE on merge; Algo-NW is a separate 46–54 @ 1.70× book.</p>
+      <label class="tog">Algo-CW (current week) <input id="s_a2en" type="checkbox" /></label>
+      <label class="tog" title="When on: allow a 2nd Algo-CW dual after 11:00 (skip if day already ≥ ₹3k). Off = one setup only.">
+        Algo-CW second entry
+        <input id="s_a2second" type="checkbox" />
+      </label>
+      <p class="meta" style="margin:0 0 8px">2nd dual window 11:00–13:00 IST · skipped if day P&amp;L already ≥ ₹3k</p>
+      <label class="tog">Algo-NW (46–54 @ 1.70×) <input id="s_a2nwen" type="checkbox" /></label>
       <div class="row" style="margin-top:12px; justify-content:flex-end">
         <button id="closeSettings">Cancel</button>
         <button id="saveSettings" class="ok">Save</button>
@@ -1139,14 +1138,14 @@
       const peSeries = o.peSeries || convPeSeries;
       const floor = Number(
         o.exitMult
-        ?? (o.nw ? st.config?.algo2nw_pair_exit_mult : null)
-        ?? st.config?.algo2_pair_exit_mult
+        ?? (o.nw ? st.config?.algo_nw_pair_exit_mult : null)
+        ?? st.config?.algo_cw_pair_exit_mult
         ?? 1.45
       );
-      const stretch = Array.isArray(st.config?.algo2_index_hold_stretch_mults)
-        ? st.config.algo2_index_hold_stretch_mults.map(Number).filter((x) => Number.isFinite(x) && x > 0)
+      const stretch = Array.isArray(st.config?.algo_cw_index_hold_stretch_mults)
+        ? st.config.algo_cw_index_hold_stretch_mults.map(Number).filter((x) => Number.isFinite(x) && x > 0)
         : [2.0, 2.5];
-      const maxM = Number(st.config?.algo2_index_hold_max_mult || 2.5);
+      const maxM = Number(st.config?.algo_cw_index_hold_max_mult || 2.5);
       const mults = [...new Set([floor, ...stretch, maxM].filter((x) => Number.isFinite(x) && x > 0))]
         .sort((a, b) => a - b);
       const ceEntry = Number(a2.ce_entry ?? a2.ce?.entry);
@@ -1323,7 +1322,7 @@
       const nw = !!(opts && opts.nw);
       const tag = document.getElementById(nw ? "peLiveTagNw" : "peLiveTag");
       const peSeries = nw ? nwConvPeSeries : convPeSeries;
-      const algoId = nw ? "algo2nw" : "algo2";
+      const algoId = nw ? "algo_nw" : "algo_cw";
       if (nw) {
         if (nwPePnlLine) { try { peSeries.removePriceLine(nwPePnlLine); } catch (_) {} nwPePnlLine = null; }
       } else if (pePnlLine) {
@@ -1422,7 +1421,7 @@
     }
 
     function renderConvergence(st) {
-      const a2 = st.algo2 || {};
+      const a2 = st.algo_cw || st.algo2 || {};
       setPairExitTargets(st, a2);
       if (a2.index_overlay) {
         setIndexOverlay(a2.index_overlay);
@@ -1442,7 +1441,7 @@
       const pe = a2.pe || (pair && pair.pe ? { symbol: pair.pe.tradingsymbol, ltp: pair.pe.ltp } : null);
       const band = scan.band || {};
       const rhythm = a2.rhythm || {};
-      const on = !!st.config?.algo2_enabled;
+      const on = !!st.config?.algo_cw_enabled;
       const bits = [];
       const gate = scan.merge_gate || {};
       const ceK = pair?.ce_strike ?? pair?.strike;
@@ -1557,15 +1556,15 @@
     let convHadData = false;
 
     function renderConvergenceNw(st) {
-      const a2 = st.algo2nw || {};
-      const nwOpts = { nw: true, ceSeries: nwConvCeSeries, peSeries: nwConvPeSeries, exitMult: st.config?.algo2nw_pair_exit_mult };
+      const a2 = st.algo_nw || st.algo2nw || {};
+      const nwOpts = { nw: true, ceSeries: nwConvCeSeries, peSeries: nwConvPeSeries, exitMult: st.config?.algo_nw_pair_exit_mult };
       setPairExitTargets(st, a2, nwOpts);
       const scan = st.scan_nw || {};
       const pair = scan.pair || null;
       const ce = a2.ce || (pair && pair.ce ? { symbol: pair.ce.tradingsymbol, ltp: pair.ce.ltp } : null);
       const pe = a2.pe || (pair && pair.pe ? { symbol: pair.pe.tradingsymbol, ltp: pair.pe.ltp } : null);
       const band = scan.band || a2.screen_band || {};
-      const on = !!st.config?.algo2nw_enabled;
+      const on = !!st.config?.algo_nw_enabled;
       const bits = [];
       const ceK = pair?.ce_strike ?? pair?.strike ?? a2.ce?.strike;
       const peK = pair?.pe_strike ?? pair?.strike ?? a2.pe?.strike;
@@ -1579,7 +1578,7 @@
       if (pair) bits.push(`<span class="track">gap ${pair.gap ?? "—"} · mid ${pair.mid ?? "—"}</span>`);
       bits.push(
         `<span class="track">NW band ${band.low ?? 46}–${band.high ?? 54}` +
-        ` · exit ${Number(st.config?.algo2nw_pair_exit_mult || 1.7).toFixed(2)}×` +
+        ` · exit ${Number(st.config?.algo_nw_pair_exit_mult || 1.7).toFixed(2)}×` +
         ` · max 1 setup</span>`
       );
       if (scan.error) bits.push(`<span class="track" style="color:#ef5350">${String(scan.error).slice(0, 48)}</span>`);
@@ -1660,10 +1659,6 @@
           );
         }
         if (db.message) bits.push(String(db.message).slice(0, 70));
-        const a1 = (st.activity || {}).algo1 || st.algo1 || {};
-        if (!bits.length && (a1.message || a1.phase)) {
-          bits.push(`${a1.phase || "—"} · ${String(a1.message || "").slice(0, 80)}`);
-        }
         msg = bits.join(" · ");
       }
       if (!msg) msg = "scanning — waiting for criteria…";
@@ -1699,24 +1694,24 @@
     }
 
     function renderAlgoLog(st) {
-      const a2 = (st.activity || {}).algo2 || st.algo2 || {};
-      const a2nw = (st.activity || {}).algo2nw || st.algo2nw || {};
+      const a2 = (st.activity || {}).algo_cw || (st.activity || {}).algo2 || st.algo_cw || st.algo2 || {};
+      const a2nw = (st.activity || {}).algo_nw || (st.activity || {}).algo2nw || st.algo_nw || st.algo2nw || {};
       const metaCw = document.getElementById("alogMetaCw");
       const metaNw = document.getElementById("alogMetaNw");
       if (metaCw) {
         metaCw.textContent =
-          `${st.config?.algo2_enabled ? "ON" : "OFF"} · ${a2.phase || a2.state || "—"}` +
+          `${st.config?.algo_cw_enabled ? "ON" : "OFF"} · ${a2.phase || a2.state || "—"}` +
           `${a2.message ? " · " + String(a2.message).slice(0, 36) : ""}`;
       }
       if (metaNw) {
         metaNw.textContent =
-          `${st.config?.algo2nw_enabled !== false ? "ON" : "OFF"} · ${a2nw.phase || a2nw.state || "—"}` +
+          `${st.config?.algo_nw_enabled !== false ? "ON" : "OFF"} · ${a2nw.phase || a2nw.state || "—"}` +
           `${a2nw.message ? " · " + String(a2nw.message).slice(0, 36) : ""}`;
       }
       const cwRows = st.activity_log_cw
-        || (st.activity_log || []).filter((r) => (r.algo || "algo2") !== "algo2nw");
+        || (st.activity_log || []).filter((r) => (r.algo || "algo_cw") !== "algo_nw");
       const nwRows = st.activity_log_nw
-        || (st.activity_log || []).filter((r) => r.algo === "algo2nw");
+        || (st.activity_log || []).filter((r) => r.algo === "algo_nw");
       const lastCw = cwRows.length ? cwRows[cwRows.length - 1] : null;
       const fpCw = lastCw ? `${cwRows.length}|${lastCw.ts}|${lastCw.message}` : "0";
       if (fpCw !== lastAlogFpCw) {
@@ -1890,8 +1885,8 @@
 
     function algoDisplayName(algo) {
       const a = String(algo || "");
-      if (a === "algo2") return "Algo1 CW";
-      if (a === "algo2nw") return "Algo2 NW";
+      if (a === "algo_cw") return "Algo-CW";
+      if (a === "algo_nw") return "Algo-NW";
       if (a === "algo1") return "Algo1 FT";
       if (a === "algo1_sx") return "Sensex";
       return a || "—";
@@ -2264,8 +2259,8 @@
           .map(normalizeTradeRow);
         return [...opens, ...closed];
       };
-      const cw = rows.filter((t) => t.algo !== "algo2nw");
-      const nw = rows.filter((t) => t.algo === "algo2nw");
+      const cw = rows.filter((t) => t.algo !== "algo_nw");
+      const nw = rows.filter((t) => t.algo === "algo_nw");
       return { cw: toRows(cw), nw: toRows(nw) };
     }
 
@@ -2422,17 +2417,25 @@
       const logoutBtn = document.getElementById("logoutBtn");
       const idleOn = !!(st.kite_idle && st.kite_idle.active);
       const need = !idleOn && (!!auth.needs_login || auth.ok === false);
+      const loginWhen = formatTokenCreated(auth.saved_at);
+      const loginBit = loginWhen ? ` · ${loginWhen}` : "";
+      const loginTitle = auth.saved_at
+        ? `Last Kite login / token: ${auth.saved_at}`
+        : "No saved_at on token — login once to stamp it";
       if (badge) {
         if (idleOn) {
-          badge.textContent = "AUTH IDLE";
+          badge.textContent = `AUTH IDLE${loginBit}`;
           badge.className = "badge ok";
-          badge.title = "After 15:40 — Zerodha not required; Reports still work";
+          badge.title = `After 15:40 — Zerodha not required; Reports still work. ${loginTitle}`;
         } else if (need) {
           badge.textContent = "AUTH LOGIN";
           badge.className = "badge warn";
+          badge.title = loginTitle;
         } else {
-          badge.textContent = auth.user_name ? `AUTH ${auth.user_name}` : "AUTH OK";
+          const who = auth.user_name || auth.user_id || "OK";
+          badge.textContent = `AUTH ${who}${loginBit}`;
           badge.className = "badge ok";
+          badge.title = loginTitle;
         }
       }
       if (logoutBtn) {
@@ -2633,15 +2636,15 @@
       const late = st.scan?.late_report;
       const lb = document.getElementById("lateBadge");
       const tokenWhen = formatTokenCreated((st.auth || {}).saved_at);
-      const tokenBit = tokenWhen ? ` · ${tokenWhen} IST` : "";
+      const tokenBit = tokenWhen ? ` · login ${tokenWhen}` : " · login —";
       if (late && late.late) {
         lb.textContent = `LATE +${late.minutes_since_open || "?"}m${tokenBit}`;
         lb.title = (late.message || "Late start") +
-          ((st.auth || {}).saved_at ? ` | Kite session ${(st.auth || {}).saved_at}` : "");
+          ((st.auth || {}).saved_at ? ` | Kite session ${(st.auth || {}).saved_at}` : " | no token saved_at");
       } else {
-        lb.textContent = `ON-TIME${tokenBit}`;
-        lb.title = "Started near open — live tracking" +
-          ((st.auth || {}).saved_at ? ` | Kite session ${(st.auth || {}).saved_at}` : "");
+        lb.textContent = `START${tokenBit}`;
+        lb.title = "Engine start timing + last Kite login" +
+          ((st.auth || {}).saved_at ? ` | Kite session ${(st.auth || {}).saved_at}` : " | no token saved_at");
       }
 
       const p = st.pnl || {};
@@ -2675,8 +2678,8 @@
       `;
 
       const act = st.activity || {};
-      const a2s = st.algo2 || {};
-      const a2on = !!st.config?.algo2_enabled;
+      const a2s = st.algo_cw || st.algo2 || {};
+      const a2on = !!st.config?.algo_cw_enabled;
       const state = a2s.phase || (st.in_session ? "SCAN" : "OUT_OF_WINDOW");
       const hbAge = Number(st.heartbeat?.tick_age ?? st.heartbeat?.age_sec);
       const stall = st.stall_alert || {};
@@ -2712,23 +2715,19 @@
       }
       document.getElementById("actHeadline").textContent =
         (a2on ? "CONVERGENCE" : "OFF") + " · " + (act.headline || state);
-      const actA1 = document.getElementById("actA1");
-      if (actA1) {
-        actA1.innerHTML = `<strong>FastTrack</strong> <span class="st-OFF">OFF</span>`;
-      }
-      const a2Lots = Math.max(1, Number(st.config?.algo2_lots || 1));
+      const a2Lots = Math.max(1, Number(st.config?.algo_cw_lots || 1));
       const lotSize = Math.max(1, Number(st.config?.lot_size || 75));
-      const a2nw = st.algo2nw || {};
-      const a2nwon = st.config?.algo2nw_enabled !== false;
+      const a2nw = st.algo_nw || st.algo2nw || {};
+      const a2nwon = st.config?.algo_nw_enabled !== false;
       document.getElementById("actA2").innerHTML =
-        `<strong>CW</strong> ${a2on ? (a2s.phase || "SCAN") : "OFF"}` +
+        `<strong>Algo-CW</strong> ${a2on ? (a2s.phase || "SCAN") : "OFF"}` +
         ` · <b>${a2Lots} lot${a2Lots === 1 ? "" : "s"}</b>` +
         ` <span title="${a2s.message || ""}">${a2s.message ? "· " + String(a2s.message).slice(0, 36) : ""}</span>`;
       const actA2nw = document.getElementById("actA2nw");
       if (actA2nw) {
         actA2nw.innerHTML =
-          `<strong>NW</strong> ${a2nwon ? (a2nw.phase || "SCAN") : "OFF"}` +
-          ` · 46–54@${Number(st.config?.algo2nw_pair_exit_mult || 1.7).toFixed(2)}×` +
+          `<strong>Algo-NW</strong> ${a2nwon ? (a2nw.phase || "SCAN") : "OFF"}` +
+          ` · 46–54@${Number(st.config?.algo_nw_pair_exit_mult || 1.7).toFixed(2)}×` +
           ` <span title="${a2nw.message || ""}">${a2nw.message ? "· " + String(a2nw.message).slice(0, 36) : ""}</span>`;
       }
       document.getElementById("actOpen").innerHTML =
@@ -2738,16 +2737,15 @@
         `<strong>Capital used</strong> ${money(act.open_invested)}`;
       renderCriteriaLive(st);
       const cap = Number(st.config?.capital_inr || 0);
-      const a2cap = Number(st.config?.algo2_capital_inr ?? cap);
-      const nwcap = Number(st.config?.algo2nw_capital_inr ?? a2cap);
+      const a2cap = Number(st.config?.algo_cw_capital_inr ?? cap);
+      const nwcap = Number(st.config?.algo_nw_capital_inr ?? a2cap);
       const capBadge = document.getElementById("capitalBadge");
       if (capBadge) {
         capBadge.textContent = a2cap
-          ? `CW ₹${a2cap.toLocaleString("en-IN")} · NW ₹${nwcap.toLocaleString("en-IN")}`
+          ? `Algo-CW ₹${a2cap.toLocaleString("en-IN")} · Algo-NW ₹${nwcap.toLocaleString("en-IN")}`
           : "CAPITAL —";
         capBadge.title =
-          `Algo1 ₹${Number(st.config?.algo1_capital_inr ?? cap).toLocaleString("en-IN")} · ` +
-          `Algo2 ₹${a2cap.toLocaleString("en-IN")} · NW ₹${nwcap.toLocaleString("en-IN")}`;
+          `Algo-CW ₹${a2cap.toLocaleString("en-IN")} · Algo-NW ₹${nwcap.toLocaleString("en-IN")}`;
       }
       const lotsBadge = document.getElementById("lotsBadge");
       if (lotsBadge) {
@@ -2852,7 +2850,7 @@
       const cap = Number(st.config.capital_inr || 100000);
       const depPct = Math.round(Number(st.config.deploy_pct_of_balance || 1) * 100);
       const depClamped = Math.min(100, Math.max(50, depPct || 100));
-      const a2Lots = Math.min(15, Math.max(1, Number(st.config.algo2_lots || 4)));
+      const a2Lots = Math.min(15, Math.max(1, Number(st.config.algo_cw_lots || 4)));
       const lotSize = Math.max(1, Number(st.config.lot_size || 75));
       const pickCap = (v) => (v != null && Number.isFinite(Number(v)) ? Number(v) : cap);
       const pickDep = (v) => {
@@ -2861,25 +2859,28 @@
         return Math.min(100, Math.max(50, n > 1.5 ? Math.round(n) : Math.round(n * 100)));
       };
       document.getElementById("s_capital").value = cap;
-      document.getElementById("s_a1cap").value = pickCap(st.config.algo1_capital_inr);
-      document.getElementById("s_a2cap").value = pickCap(st.config.algo2_capital_inr);
+      document.getElementById("s_a2cap").value = pickCap(st.config.algo_cw_capital_inr);
       document.getElementById("s_a2nwcap").value = pickCap(
-        st.config.algo2nw_capital_inr ?? st.config.algo2_capital_inr
+        st.config.algo_nw_capital_inr ?? st.config.algo_cw_capital_inr
       );
-      document.getElementById("s_a1dep").value = pickDep(st.config.algo1_deploy_pct);
-      document.getElementById("s_a2dep").value = pickDep(st.config.algo2_deploy_pct);
+      document.getElementById("s_a2dep").value = pickDep(st.config.algo_cw_deploy_pct);
       document.getElementById("s_a2nwdep").value = pickDep(
-        st.config.algo2nw_deploy_pct ?? st.config.algo2_deploy_pct
+        st.config.algo_nw_deploy_pct ?? st.config.algo_cw_deploy_pct
       );
-      document.getElementById("s_a2en").checked = !!st.config.algo2_enabled;
+      document.getElementById("s_a2en").checked = !!st.config.algo_cw_enabled;
+      const secondEl = document.getElementById("s_a2second");
+      if (secondEl) {
+        // Default ON when key missing (matches config_store)
+        secondEl.checked = st.config.algo_cw_second_entry_enabled !== false;
+      }
       const nwEn = document.getElementById("s_a2nwen");
-      if (nwEn) nwEn.checked = st.config.algo2nw_enabled !== false;
+      if (nwEn) nwEn.checked = st.config.algo_nw_enabled !== false;
       document.getElementById("s_max").value = st.config.max_trades_per_day;
       const lotsInput = document.getElementById("s_a2lots");
       lotsInput.value = a2Lots;
       lotsInput.dataset.lotSize = String(lotSize);
       document.getElementById("s_deployHint").textContent =
-        `Fallback ₹${cap.toLocaleString("en-IN")} · Algo2 ₹${pickCap(st.config.algo2_capital_inr).toLocaleString("en-IN")} · NW ₹${pickCap(st.config.algo2nw_capital_inr ?? st.config.algo2_capital_inr).toLocaleString("en-IN")}`;
+        `Fallback ₹${cap.toLocaleString("en-IN")} · Algo-CW ₹${pickCap(st.config.algo_cw_capital_inr).toLocaleString("en-IN")} · Algo-NW ₹${pickCap(st.config.algo_nw_capital_inr ?? st.config.algo_cw_capital_inr).toLocaleString("en-IN")}`;
       refreshLotsHint();
       document.getElementById("settingsModal").classList.add("open");
     };
@@ -2894,13 +2895,14 @@
         return Math.min(100, Math.max(50, v)) / 100;
       };
       const capital = readCap("s_capital");
-      const a1Cap = readCap("s_a1cap");
       const a2Cap = readCap("s_a2cap");
       const a2nwCap = readCap("s_a2nwcap");
-      const a1Dep = readDep("s_a1dep");
       const a2Dep = readDep("s_a2dep");
       const a2nwDep = readDep("s_a2nwdep");
       const convOn = document.getElementById("s_a2en").checked;
+      const secondOn = document.getElementById("s_a2second")
+        ? document.getElementById("s_a2second").checked
+        : true;
       const convNwOn = document.getElementById("s_a2nwen")
         ? document.getElementById("s_a2nwen").checked
         : true;
@@ -2915,19 +2917,21 @@
           capital_inr: capital,
           deploy_pct_of_balance: a2Dep,
           dual_deploy_pct: a2Dep,
-          algo1_capital_inr: a1Cap,
-          algo2_capital_inr: a2Cap,
-          algo2nw_capital_inr: a2nwCap,
-          algo1_deploy_pct: a1Dep,
-          algo2_deploy_pct: a2Dep,
-          algo2nw_deploy_pct: a2nwDep,
-          algo2_lots: a2Lots,
+          algo_cw_capital_inr: a2Cap,
+          algo_nw_capital_inr: a2nwCap,
+          algo_cw_deploy_pct: a2Dep,
+          algo_nw_deploy_pct: a2nwDep,
+          algo_cw_lots: a2Lots,
           max_lots_per_trade: 15,
           min_lots_per_trade: 1,
-          // Convergence-only book — keep every other algo hard-off on save
+          // Algo-CW + Algo-NW only — Algo1 / FastTrack hard-off
           algo1_enabled: false,
-          algo2_enabled: convOn,
-          algo2nw_enabled: convNwOn,
+          algo1_convergence_dual: false,
+          algo_cw_enabled: convOn,
+          algo_cw_second_entry_enabled: secondOn,
+          // Keep cap in sync with the checkbox so daily setup count matches UI
+          algo_cw_max_setups_per_day: secondOn ? 2 : 1,
+          algo_nw_enabled: convNwOn,
           dual_mode: false,
           directional_mode: false,
           require_convergence: true,
@@ -2956,9 +2960,8 @@
         }),
       });
       showToast(
-        `CW ${convOn ? "ON" : "OFF"} ₹${a2Cap.toLocaleString("en-IN")} · ` +
-        `NW ${convNwOn ? "ON" : "OFF"} ₹${a2nwCap.toLocaleString("en-IN")} · ` +
-        `A1 ₹${a1Cap.toLocaleString("en-IN")}`
+        `CW ${convOn ? "ON" : "OFF"} · 2nd ${secondOn ? "ON" : "OFF"} ₹${a2Cap.toLocaleString("en-IN")} · ` +
+        `NW ${convNwOn ? "ON" : "OFF"} ₹${a2nwCap.toLocaleString("en-IN")}`
       );
       document.getElementById("settingsModal").classList.remove("open");
       tick();
@@ -2966,6 +2969,9 @@
     document.getElementById("reportsBtn").onclick = () => {
       const live = document.getElementById("modeBadge")?.textContent === "LIVE";
       window.open(live ? "/reports?mode=live" : "/reports", "_blank", "noopener,noreferrer");
+    };
+    document.getElementById("labBtn").onclick = () => {
+      window.open("/lab", "_blank", "noopener,noreferrer");
     };
     document.getElementById("chainFilterBtn").onclick = () => {
       window.open("/option-chain-filter", "_blank", "noopener,noreferrer");

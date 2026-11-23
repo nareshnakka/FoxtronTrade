@@ -1,4 +1,4 @@
-# FoxtronTrade — Nifty Convergence Algos
+# FoxtronTrade — Nifty Algo-CWs
 
 Dual parallel engines on Zerodha Kite:
 
@@ -19,7 +19,7 @@ python app.py            # http://127.0.0.1:5050
 
 ## Dashboard
 
-- Top: Algo1 + Algo2 option line charts with convergence band  
+- Top: Algo1 + Algo-CW option line charts with convergence band  
 - Bottom: Nifty day candles + entries / live P&L table  
 - Settings: lots per algo, enable flags  
 - Reports: Daily / Weekly / Monthly P&L  

@@ -35,20 +35,20 @@ _DEFAULTS: dict[str, Any] = {
     "sensex_block_pre_expiry": True,
     "sensex_pre_expiry_weekday": 0,
     "algo1_enabled": False,
-    "algo2_enabled": True,
+    "algo_cw_enabled": True,
     "directional_mode": False,
     "require_convergence": True,
     "directional_min_confidence": 0.58,
     "directional_min_margin": 0.12,
     "algo1_lots": 1,
-    "algo2_lots": 1,
+    "algo_cw_lots": 1,
     # Per-algo capital for sizing (fallback → capital_inr)
     "algo1_capital_inr": None,
-    "algo2_capital_inr": None,
-    "algo2nw_capital_inr": None,
+    "algo_cw_capital_inr": None,
+    "algo_nw_capital_inr": None,
     "algo1_deploy_pct": None,
-    "algo2_deploy_pct": None,
-    "algo2nw_deploy_pct": None,
+    "algo_cw_deploy_pct": None,
+    "algo_nw_deploy_pct": None,
     "lot_size": 75,
     # Dual 70–80 convergence (live from backtest): buy both, exit both @ 1.45×
     "premium_low": 70,
@@ -90,99 +90,101 @@ _DEFAULTS: dict[str, Any] = {
     "convergence_pipe_hard_bridge": 2,
     # Wedge rails (hand-drawn style high/low channel) + rail-break entry
     "convergence_rail_mode": "band",
-    "algo2_break_on_rail": True,
+    "algo_cw_break_on_rail": True,
     # 3 = require three successive higher prints after rail/hard arm (anti-fake)
-    "algo2_break_confirm_points": 3,
-    "algo2_break_rail_buffer": 1.0,
+    "algo_cw_break_confirm_points": 3,
+    "algo_cw_break_rail_buffer": 1.0,
     # Opposite-rail reverse while holding breakout: book + flip
-    "algo2_rail_reverse_enabled": True,
-    "algo2_rail_reverse_flip": True,
+    "algo_cw_rail_reverse_enabled": True,
+    "algo_cw_rail_reverse_flip": True,
     # Fallen hammer/star candle break: book winner + flip into fallen
-    "algo2_fallen_rev_flip": True,
+    "algo_cw_fallen_rev_flip": True,
     # False = buy BOTH CE+PE on in-band merge (dual 70–80 mode)
-    "algo2_breakout_only": False,
-    "algo2_breakout_hard_gap": 12.0,
+    "algo_cw_breakout_only": False,
+    "algo_cw_breakout_hard_gap": 12.0,
     # Enter when winner premium ≥ last convergence mid + this many points
-    "algo2_entry_above_conv_pts": 12.0,
+    "algo_cw_entry_above_conv_pts": 12.0,
     # Do not lock / trade merge before this IST time (skip open noise)
-    "algo2_merge_after": "09:20",
+    "algo_cw_merge_after": "09:20",
     # Dual hold: arm exit when either leg ≥ this × entry (0 = use TL/book path)
-    "algo2_pair_exit_mult": 1.45,
-    # —— Convergence Next-Week (algo2nw): parallel book, 1 setup/day ——
-    "algo2nw_enabled": True,
-    "algo2nw_premium_low": 46.0,
-    "algo2nw_premium_high": 54.0,
-    "algo2nw_pair_exit_mult": 1.70,
-    "algo2nw_max_setups_per_day": 1,
-    "algo2nw_index_channel_hold": False,
-    "algo2nw_dual_size_from_capital": True,
-    "algo2nw_lots": 1,
+    "algo_cw_pair_exit_mult": 1.45,
+    # —— Algo-NW (algo_nw): parallel book, 1 setup/day ——
+    "algo_nw_enabled": True,
+    "algo_nw_premium_low": 46.0,
+    "algo_nw_premium_high": 54.0,
+    "algo_nw_pair_exit_mult": 1.70,
+    "algo_nw_max_setups_per_day": 1,
+    "algo_nw_index_channel_hold": False,
+    "algo_nw_dual_size_from_capital": True,
+    "algo_nw_lots": 1,
     # First exit: wait for giveback from peak (False = book at 1.45× touch — BT winner)
-    "algo2_pair_exit_wait_retrace": False,
-    "algo2_pair_exit_retrace_min_pct": 5.0,   # start booking once ≥ this giveback from peak
-    "algo2_pair_exit_retrace_max_pct": 30.0,  # force book by this giveback (no deeper wait)
+    "algo_cw_pair_exit_wait_retrace": False,
+    "algo_cw_pair_exit_retrace_min_pct": 5.0,   # start booking once ≥ this giveback from peak
+    "algo_cw_pair_exit_retrace_max_pct": 30.0,  # force book by this giveback (no deeper wait)
     # While waiting for retrace: if fallen (loser) reverses, square both immediately
-    "algo2_pair_exit_fallen_reverse_pts": 8.0,
-    "algo2_pair_exit_fallen_reverse_pct": 12.0,
+    "algo_cw_pair_exit_fallen_reverse_pts": 8.0,
+    "algo_cw_pair_exit_fallen_reverse_pct": 12.0,
     # After winner sold: if sold-winner premium reverses down, dump fallen immediately
-    "algo2_pair_sold_reverse_exit": True,
-    "algo2_pair_sold_reverse_pct": 8.0,
-    # If fallen LTP is still below this when winner hits pair-exit, hold it
-    "algo2_pair_hold_fallen_below": 45.0,
+    "algo_cw_pair_sold_reverse_exit": True,
+    "algo_cw_pair_sold_reverse_pct": 8.0,
+    # If fallen LTP is still below this when winner hits pair-exit, hold it (0 = always square both)
+    "algo_cw_pair_hold_fallen_below": 0.0,
     # Sell held fallen after bounce from its low (points)
-    "algo2_pair_fallen_bounce_min": 5.0,
-    "algo2_pair_fallen_bounce_max": 10.0,
+    "algo_cw_pair_fallen_bounce_min": 5.0,
+    "algo_cw_pair_fallen_bounce_max": 10.0,
     # Multi-cycle dual: max completed/open setups per day (3rd was systematically EOD-losing)
-    "algo2_max_setups_per_day": 2,
-    # 2nd dual only: hunt merges at/after this IST clock (1st uses algo2_merge_after only)
-    "algo2_second_entry_after": "11:00",
+    "algo_cw_max_setups_per_day": 2,
+    # Master switch for optional 2nd dual (Settings checkbox). Off → only 1 setup/day.
+    "algo_cw_second_entry_enabled": True,
+    # 2nd dual only: hunt merges at/after this IST clock (1st uses algo_cw_merge_after only)
+    "algo_cw_second_entry_after": "11:00",
     # 2nd dual only: no new merge at/after this IST clock (1st still allowed after 09:20)
-    "algo2_last_entry_before": "13:00",
-    # Skip optional 2nd if today's closed algo2 net already ≥ this (₹); 0 = never skip on P&L
-    "algo2_skip_second_if_day_pnl_ge": 15000.0,
+    "algo_cw_last_entry_before": "13:00",
+    # Skip optional 2nd if today's closed Algo-CW net already ≥ this (₹); 0 = never skip on P&L
+    "algo_cw_skip_second_if_day_pnl_ge": 3000.0,  # consistent profit: skip 2nd if day already ≥ ₹3k
     # After a closed dual, short cool-down before hunting next merge (pair-exit mode)
-    "algo2_reentry_cooldown_minutes": 1,
-    # Size dual lots from capital×deploy/((CE+PE)×lot) instead of fixed algo2_lots
-    "algo2_dual_size_from_capital": True,
+    "algo_cw_reentry_cooldown_minutes": 1,
+    # Size dual lots from capital×deploy/((CE+PE)×lot) instead of fixed algo_cw_lots
+    "algo_cw_dual_size_from_capital": True,
     # Fallen: exit on reverse +bounce / near mid (ride off by default)
-    "algo2_fallen_ride_enabled": False,
+    "algo_cw_fallen_ride_enabled": False,
     # Dual: book when one leg hits top (165–175); edge kept unused by default path
-    "algo2_dual_edge_pts": 12.0,
+    "algo_cw_dual_edge_pts": 12.0,
     # Winner up-TL / fallen down-TL exits (dotted on chart)
-    "algo2_breakout_tl_enabled": True,
-    "algo2_breakout_tl_buffer": 1.0,
-    "algo2_breakout_tl_lookback": 12,
+    "algo_cw_breakout_tl_enabled": True,
+    "algo_cw_breakout_tl_buffer": 1.0,
+    "algo_cw_breakout_tl_lookback": 12,
     # Rolling bars for CE/PE parallel channel (screenshot-style)
-    "algo2_channel_lookback_bars": 60,
+    "algo_cw_channel_lookback_bars": 60,
     # Re-fit CE/PE parallel channels from convergence every N seconds
-    "algo2_channel_replot_seconds": 30,
+    "algo_cw_channel_replot_seconds": 30,
     # Index (Nifty) parallel channel + S/R on Nifty chart (dotted)
-    "algo2_index_channel_enabled": True,
+    "algo_cw_index_channel_enabled": True,
     # Fit Index channel from recent swing trough/peak (~3h of 5m bars), not day open
-    "algo2_index_channel_bars": 48,
-    "algo2_index_channel_tol": 5.0,
-    "algo2_index_sr_count": 4,
+    "algo_cw_index_channel_bars": 48,
+    "algo_cw_index_channel_tol": 5.0,
+    "algo_cw_index_sr_count": 4,
     # Index channel decides stretch past pair-exit (1.45×): ride 2× / 2.5× or trail @1.45×
-    "algo2_index_channel_hold": True,
-    "algo2_index_channel_break_buf": 8.0,
-    "algo2_index_hold_max_mult": 2.5,
-    "algo2_index_hold_stretch_mults": [2.0, 2.5],
+    "algo_cw_index_channel_hold": True,
+    "algo_cw_index_channel_break_buf": 8.0,
+    "algo_cw_index_hold_max_mult": 2.5,
+    "algo_cw_index_hold_stretch_mults": [2.0, 2.5],
     # Floor trail: once ≥1.45×, never give back below pair-exit; also % giveback from peak
-    "algo2_index_hold_trail_at_pair_exit": True,
-    "algo2_index_hold_giveback_pct": 15.0,
+    "algo_cw_index_hold_trail_at_pair_exit": True,
+    "algo_cw_index_hold_giveback_pct": 15.0,
     # Inside channel: still extend if spot in favorable half (0–1 along lo→hi)
-    "algo2_index_hold_inside_frac": 0.55,
+    "algo_cw_index_hold_inside_frac": 0.55,
     # Fit/plot TLs from session open (09:15), even if merge is after 09:20
-    "algo2_breakout_tl_from_day_start": True,
+    "algo_cw_breakout_tl_from_day_start": True,
     # Winner always exits below up-TL. True = also exit fallen on down-TL break.
-    "algo2_breakout_tl_exit_live": False,
-    "algo2_breakout_tl_grace_bars": 5,
+    "algo_cw_breakout_tl_exit_live": False,
+    "algo_cw_breakout_tl_grace_bars": 5,
     # Same-day re-merge above the day's first conv mid = upside→decay — skip
-    "algo2_reject_higher_remerge": True,
-    "algo2_higher_remerge_buffer": 2.0,
+    "algo_cw_reject_higher_remerge": True,
+    "algo_cw_higher_remerge_buffer": 2.0,
     # SL only after breakout leaves merge, then falls back to last convergence mid
-    "algo2_sl_below_convergence": 0.0,
-    "algo2_sl_leave_pts": 1.0,
+    "algo_cw_sl_below_convergence": 0.0,
+    "algo_cw_sl_leave_pts": 1.0,
     # Soft 168–175 book only when fallen side breaks its channel TL
     "breakout_book_needs_fallen_tl": True,
     # Early winner lean — persist / last+ATM (flip-resistant; no majority/cum)
@@ -221,6 +223,25 @@ _DEFAULTS: dict[str, Any] = {
     "atm_diag_wing_depth": 2,
     "prior_pe": 0.65,
     "algo1_min_confidence": 0.52,
+    # Algo1 convergence dual (promotable from Train Lab)
+    "algo1_convergence_dual": False,
+    "algo1_premium_low": 70.0,
+    "algo1_premium_high": 77.0,
+    "algo1_pair_exit_mult": 1.45,
+    "algo1_max_setups_per_day": 2,
+    "algo1_skip_second_if_day_pnl_ge": 1.0,
+    "algo1_merge_after": "09:20",
+    "algo1_second_entry_after": "11:00",
+    "algo1_last_entry_before": "13:00",
+    "algo1_pair_exit_wait_retrace": False,
+    "algo1_reentry_cooldown_minutes": 1,
+    "algo1_dual_size_from_capital": True,
+    "algo1_day_type_adaptive": True,
+    # Train Lab audit stamps
+    "train_lab_at": None,
+    "train_lab_tag": None,
+    "train_lab_algo": None,
+    "train_lab_pnl": None,
     "exclusive_entries": False,
     "decay_observe_seconds": 480,
     "decay_score_threshold": 0.55,
@@ -228,6 +249,9 @@ _DEFAULTS: dict[str, Any] = {
     # 24×7 unattended: auto TOTP login + heartbeat watchdog
     "unattended_mode": True,
     "unattended_auto_login": True,
+    # Weekday morning: delete token + TOTP relogin (Zerodha daily session)
+    "morning_token_refresh_enabled": True,
+    "morning_token_refresh_hm": "09:00",  # IST; runs once in a 3-minute window
     "heartbeat_max_age_sec": 180,
     # Position integrity — OPEN on disk is truth; no fresh entry until squared
     "block_new_while_any_open": True,
@@ -385,8 +409,8 @@ _DEFAULTS: dict[str, Any] = {
     "trend_confirm_minutes": 20,
     "trend_block_counter": True,
     "trend_or_fade_override": True,
-    "algo2_trend_breakout_boost": True,
-    "algo2_trend_fallen_sl_pts": 6,
+    "algo_cw_trend_breakout_boost": True,
+    "algo_cw_trend_fallen_sl_pts": 6,
     # Expert risk / anti-fake / 2L book
     "capital_inr": 100000,
     "risk_per_trade_pct": 0.75,
@@ -472,7 +496,7 @@ _DEFAULTS: dict[str, Any] = {
     "post_loss_min_confidence": 0.58,
     "post_loss_min_confidence_2": 0.65,
     "max_losses_before_halt": 1,
-    "algo2_min_minutes": 45,
+    "algo_cw_min_minutes": 45,
     "chop_near_open_pts": 45,
     "require_session_extreme": True,
     "extreme_proximity_pts": 15,
@@ -663,11 +687,25 @@ _DEFAULTS: dict[str, Any] = {
 _lock = threading.Lock()
 
 
+def _migrate_algo_keys(data: dict[str, Any]) -> dict[str, Any]:
+    """Map legacy algo2* / algo2nw* config keys → algo_cw* / algo_nw*."""
+    out = dict(data)
+    # Longer prefix first
+    for old_prefix, new_prefix in (("algo2nw_", "algo_nw_"), ("algo2_", "algo_cw_")):
+        for key in list(out.keys()):
+            if not key.startswith(old_prefix):
+                continue
+            new_key = new_prefix + key[len(old_prefix) :]
+            if new_key not in out:
+                out[new_key] = out[key]
+    return out
+
+
 def load_config() -> dict[str, Any]:
     with _lock:
         data = deepcopy(_DEFAULTS)
         if CONFIG_PATH.exists():
-            data.update(json.loads(CONFIG_PATH.read_text(encoding="utf-8")))
+            data.update(_migrate_algo_keys(json.loads(CONFIG_PATH.read_text(encoding="utf-8"))))
         return data
 
 
@@ -675,7 +713,8 @@ def save_config(updates: dict[str, Any]) -> dict[str, Any]:
     with _lock:
         data = deepcopy(_DEFAULTS)
         if CONFIG_PATH.exists():
-            data.update(json.loads(CONFIG_PATH.read_text(encoding="utf-8")))
+            data.update(_migrate_algo_keys(json.loads(CONFIG_PATH.read_text(encoding="utf-8"))))
+        updates = _migrate_algo_keys(dict(updates or {}))
         for key, value in updates.items():
             if key in _DEFAULTS:
                 data[key] = value

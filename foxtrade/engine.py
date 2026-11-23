@@ -7,8 +7,10 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from foxtrade import trade_store
+from foxtrade.algo_ids import matches
 from foxtrade.algo1_breakout import Algo1Breakout
-from foxtrade.algo2_dual import Algo2Dual
+from foxtrade.algo1_convergence import Algo1ConvergenceDual
+from foxtrade.algo_cw_dual import AlgoCwDual
 from foxtrade.atm_channel import AtmChannelBook, channel_enabled
 from foxtrade.pe_range import PeRangeBook, pe_range_enabled
 from foxtrade.dual_book import DualBook
@@ -30,6 +32,7 @@ from foxtrade import position_guard
 from foxtrade.runtime_store import load_runtime, save_runtime
 
 IST = ZoneInfo("Asia/Kolkata")
+BUILD_ID = "algo_cw_nw_v2_20261121a"
 
 
 def _parse_hhmm(raw: str, default_h: int, default_m: int) -> tuple[int, int]:
@@ -87,11 +90,12 @@ class TradingEngine:
         self.market = MarketHub(history_seconds=int(self.config.get("history_seconds", 23400)))
         self.market.dual_spot = bool(self.config.get("dual_mode", False))
         self.dual = DualBook()
-        self.algo1 = self.dual.books["NIFTY"]  # dashboard / legacy alias
-        self.algo2 = Algo2Dual()
-        self.algo2nw = Algo2Dual(
-            algo_id="algo2nw",
-            display_name="Convergence Next-Week",
+        self.algo1 = self.dual.books["NIFTY"]  # dashboard / legacy alias (breakout)
+        self.algo1_conv = Algo1ConvergenceDual()  # Algo1 dual+day-type (does not alter Algo-CW)
+        self.algo_cw = AlgoCwDual()
+        self.algo_nw = AlgoCwDual(
+            algo_id="algo_nw",
+            display_name="Algo-NW",
             week_mode="next",
         )
         self.scan_nw: dict[str, Any] = {}
@@ -166,8 +170,8 @@ class TradingEngine:
             pass
         msg = f"Kite idle — {reason}. Engine stopped; Reports still work."
         self.algo1.state.last_message = "AFTER MARKET · reports only"
-        self.algo2.state.last_message = "AFTER MARKET · reports only"
-        self.algo2nw.state.last_message = "AFTER MARKET · reports only"
+        self.algo_cw.state.last_message = "AFTER MARKET · reports only"
+        self.algo_nw.state.last_message = "AFTER MARKET · reports only"
         self._push_activity_log(level="info", message=msg, pulse_sec=0)
         with self.lock:
             self.notifications.append(
@@ -200,7 +204,7 @@ class TradingEngine:
         if not self.config.get("exclusive_entries", True):
             return True
         # CW + NW convergence books may both hold independently
-        if algo == "algo2nw":
+        if algo == "algo_nw":
             return True
         with self.lock:
             if self._setup_owner is None or self._setup_owner == algo:
@@ -243,10 +247,10 @@ class TradingEngine:
             for uid in self.dual.restore(runtime):
                 if uid not in restored and uid != "NIFTY":
                     restored.append(f"dual:{uid}")
-            if self.algo2.restore_from_store(runtime):
-                restored.append("algo2")
-            if self.algo2nw.restore_from_store(runtime):
-                restored.append("algo2nw")
+            if self.algo_cw.restore_from_store(runtime):
+                restored.append("algo_cw")
+            if self.algo_nw.restore_from_store(runtime):
+                restored.append("algo_nw")
             if not idle_boot:
                 self.market.set_watch(position_guard.open_watch_instruments(), replace=False)
             if restored:
@@ -269,8 +273,8 @@ class TradingEngine:
 
         if idle_boot:
             self.algo1.state.last_message = "AFTER MARKET · reports only"
-            self.algo2.state.last_message = "AFTER MARKET · reports only"
-            self.algo2nw.state.last_message = "AFTER MARKET · reports only"
+            self.algo_cw.state.last_message = "AFTER MARKET · reports only"
+            self.algo_nw.state.last_message = "AFTER MARKET · reports only"
             self.notifications.append(
                 {
                     "ts": datetime.now(IST).isoformat(),
@@ -317,17 +321,17 @@ class TradingEngine:
             self.algo1.state.last_message = "cleared ghost algo1 — no open trade"
             self.release("algo1")
         try:
-            self.algo2._sync_flat_if_no_opens(self.release)
+            self.algo_cw._sync_flat_if_no_opens(self.release)
         except Exception:
-            if not any(t.get("algo") == "algo2" for t in opens):
-                self.algo2._clear(self.release)
-                self.algo2.state.last_message = "cleared ghost algo2 — no open trade"
+            if not any(matches(t.get("algo"), "algo_cw") for t in opens):
+                self.algo_cw._clear(self.release)
+                self.algo_cw.state.last_message = "cleared ghost Algo-CW — no open trade"
         try:
-            self.algo2nw._sync_flat_if_no_opens(self.release)
+            self.algo_nw._sync_flat_if_no_opens(self.release)
         except Exception:
-            if not any(t.get("algo") == "algo2nw" for t in opens):
-                self.algo2nw._clear(self.release)
-                self.algo2nw.state.last_message = "cleared ghost algo2nw — no open trade"
+            if not any(matches(t.get("algo"), "algo_nw") for t in opens):
+                self.algo_nw._clear(self.release)
+                self.algo_nw.state.last_message = "cleared ghost Algo-NW — no open trade"
 
     def _run_eod_reset(self) -> None:
         """
@@ -362,10 +366,10 @@ class TradingEngine:
         self.algo1.state.setup_id = None
         self.algo1.state.notified = False
         self.algo1.state.last_message = "EOD reset — ready for next session"
-        self.algo2._clear(self.release)
-        self.algo2.state.last_message = "EOD reset — ready for next session"
-        self.algo2nw._clear(self.release)
-        self.algo2nw.state.last_message = "EOD reset — ready for next session"
+        self.algo_cw._clear(self.release)
+        self.algo_cw.state.last_message = "EOD reset — ready for next session"
+        self.algo_nw._clear(self.release)
+        self.algo_nw.state.last_message = "EOD reset — ready for next session"
         self.scan_nw = {}
         with self.lock:
             self._setup_owner = None
@@ -407,13 +411,18 @@ class TradingEngine:
 
         # Overnight / after 15:40 — don't hit Zerodha; reports use local data only.
         if kite_idle_now(self.config) and not trade_store.open_trades():
+            from kite_client import load_token_meta
+
+            prev = getattr(self, "_auth_status", None) or {}
+            meta = load_token_meta() or {}
             status = {
                 "ok": True,
                 "needs_login": False,
                 "reason": "kite_idle",
-                "user_name": (getattr(self, "_auth_status", None) or {}).get("user_name"),
-                "user_id": (getattr(self, "_auth_status", None) or {}).get("user_id"),
-                "saved_at": (getattr(self, "_auth_status", None) or {}).get("saved_at"),
+                "user_name": prev.get("user_name"),
+                "user_id": prev.get("user_id"),
+                # Always surface last login time from disk (idle stub used to drop it)
+                "saved_at": prev.get("saved_at") or meta.get("saved_at"),
                 "kite_idle": True,
                 "auto_login": "idle_skip",
             }
@@ -530,8 +539,8 @@ class TradingEngine:
     def _persist_runtime(self) -> None:
         snap = {
             "algo1": self.algo1.runtime_snapshot(),
-            "algo2": self.algo2.runtime_snapshot(),
-            "algo2nw": self.algo2nw.runtime_snapshot(),
+            "algo_cw": self.algo_cw.runtime_snapshot(),
+            "algo_nw": self.algo_nw.runtime_snapshot(),
             "setup_owner": self._setup_owner,
             "saved_at": datetime.now(IST).isoformat(),
         }
@@ -546,7 +555,7 @@ class TradingEngine:
         sx = self.dual.books.get("SENSEX")
         if sx and sx.state.open_trade_id:
             ids.add(sx.state.open_trade_id)
-        for book in (self.algo2, self.algo2nw):
+        for book in (self.algo_cw, self.algo_nw):
             for tid in (
                 book.state.ce_trade_id,
                 book.state.pe_trade_id,
@@ -564,8 +573,8 @@ class TradingEngine:
             if t.get("algo") in (
                 "algo1",
                 "algo1_sx",
-                "algo2",
-                "algo2nw",
+                "algo_cw",
+                "algo_nw",
                 "atm_channel",
                 "pe_range",
             ) and t.get("id"):
@@ -657,22 +666,22 @@ class TradingEngine:
     def _chart_pair_from_open(self, scan_pair: dict[str, Any] | None) -> dict[str, Any] | None:
         """Lock charts to the open trade's CE/PE pair (premium-matched), not a random same-strike sibling."""
         # Flat / no open legs → always show scanner next-week pair (don't stick on 0DTE)
-        if self.algo1.is_flat() and self.algo2.is_flat():
+        if self.algo1.is_flat() and self.algo_cw.is_flat():
             return scan_pair
         sym = self.algo1.state.open_symbol
         if not sym:
-            sym = self.algo2.state.ce_symbol or self.algo2.state.pe_symbol
+            sym = self.algo_cw.state.ce_symbol or self.algo_cw.state.pe_symbol
         # Prefer the live scan pair when it already contains the open leg
         # (e.g. PE 22600 @135 paired with CE 22950 @133 — NOT same-strike CE @325)
         if scan_pair and sym:
-            ce_s = Algo2Dual._pair_leg(scan_pair, "CE").get("tradingsymbol")
-            pe_s = Algo2Dual._pair_leg(scan_pair, "PE").get("tradingsymbol")
+            ce_s = AlgoCwDual._pair_leg(scan_pair, "CE").get("tradingsymbol")
+            pe_s = AlgoCwDual._pair_leg(scan_pair, "PE").get("tradingsymbol")
             if sym in (ce_s, pe_s):
                 return {**scan_pair, "locked_to_open": True}
-        if self.algo2.state.ce_symbol and self.algo2.state.pe_symbol:
-            ce_sym, pe_sym = self.algo2.state.ce_symbol, self.algo2.state.pe_symbol
+        if self.algo_cw.state.ce_symbol and self.algo_cw.state.pe_symbol:
+            ce_sym, pe_sym = self.algo_cw.state.ce_symbol, self.algo_cw.state.pe_symbol
         elif scan_pair and (
-            Algo2Dual._pair_leg(scan_pair, "CE") and Algo2Dual._pair_leg(scan_pair, "PE")
+            AlgoCwDual._pair_leg(scan_pair, "CE") and AlgoCwDual._pair_leg(scan_pair, "PE")
         ):
             # Single-leg algo1: keep scanner's other premium-band leg
             return {**scan_pair, "locked_to_open": True}
@@ -776,7 +785,7 @@ class TradingEngine:
             self.algo1.state.setup_id = None
             self.algo1.state.last_message = "manual square-off"
             self.release("algo1")
-        a2 = self.algo2.state
+        a2 = self.algo_cw.state
         touched = False
         for attr in ("ce_trade_id", "pe_trade_id", "breakout_trade_id", "fallen_trade_id"):
             if getattr(a2, attr, None) in ids:
@@ -790,7 +799,7 @@ class TradingEngine:
             a2.fallen_low = None
             a2.setup_id = None
             a2.last_message = "manual square-off"
-            self.release("algo2")
+            self.release("algo_cw")
         elif touched:
             a2.last_message = "manual square-off (partial)"
         try:
@@ -907,12 +916,12 @@ class TradingEngine:
         self.last_scan_at = time.time()
 
     def _maybe_scan_next_week(self) -> None:
-        """Refresh next-week CE/PE merge band for algo2nw (throttled, non-blocking)."""
-        if not self.config.get("algo2nw_enabled", True):
+        """Refresh next-week CE/PE merge band for algo_nw (throttled, non-blocking)."""
+        if not self.config.get("algo_nw_enabled", True):
             return
         now = time.time()
         # Keep scanning while flat; when in a trade, refresh slowly so LTP stays fresh
-        interval = 45.0 if self.algo2nw.is_flat() else 120.0
+        interval = 45.0 if self.algo_nw.is_flat() else 120.0
         if now - float(getattr(self, "_last_nw_scan_at", 0) or 0) < interval:
             return
         if getattr(self, "_nw_scan_inflight", False):
@@ -925,8 +934,8 @@ class TradingEngine:
             try:
                 from foxtrade.scanner import scan_next_week_premium_band
 
-                low = float(cfg.get("algo2nw_premium_low", 46) or 46)
-                high = float(cfg.get("algo2nw_premium_high", 54) or 54)
+                low = float(cfg.get("algo_nw_premium_low", 46) or 46)
+                high = float(cfg.get("algo_nw_premium_high", 54) or 54)
                 result = scan_next_week_premium_band(
                     premium_low=low,
                     premium_high=high,
@@ -941,8 +950,8 @@ class TradingEngine:
                     if isinstance(leg, dict) and leg.get("tradingsymbol"):
                         watch.append({**leg, "exchange": leg.get("exchange") or "NFO"})
                 for sym in (
-                    self.algo2nw.state.ce_symbol,
-                    self.algo2nw.state.pe_symbol,
+                    self.algo_nw.state.ce_symbol,
+                    self.algo_nw.state.pe_symbol,
                 ):
                     if sym:
                         watch.append(
@@ -1056,13 +1065,13 @@ class TradingEngine:
                 except Exception:
                     pass
                 try:
-                    if pos_integrity.open_for_algo("algo2") and self.algo2.is_flat():
-                        self.algo2.restore_from_store(load_runtime())
+                    if pos_integrity.open_for_algo("algo_cw") and self.algo_cw.is_flat():
+                        self.algo_cw.restore_from_store(load_runtime())
                 except Exception:
                     pass
                 try:
-                    if pos_integrity.open_for_algo("algo2nw") and self.algo2nw.is_flat():
-                        self.algo2nw.restore_from_store(load_runtime())
+                    if pos_integrity.open_for_algo("algo_nw") and self.algo_nw.is_flat():
+                        self.algo_nw.restore_from_store(load_runtime())
                 except Exception:
                     pass
                 # Watch OPEN symbols before any entry logic
@@ -1074,9 +1083,54 @@ class TradingEngine:
                 if datetime.now(IST).weekday() >= 5 and self.config.get("live_trading"):
                     self.config["live_trading"] = False
 
-                # Pre-market auto-login window (08:30–09:14 IST weekdays)
+                # Weekday morning hard token refresh (default 09:00 IST) — logout + TOTP login once/day
                 now_ist = datetime.now(IST)
                 mins = now_ist.hour * 60 + now_ist.minute
+                if (
+                    self.config.get("morning_token_refresh_enabled", True)
+                    and now_ist.weekday() < 5
+                    and not kite_idle_now(self.config)
+                ):
+                    try:
+                        rh, rm = str(
+                            self.config.get("morning_token_refresh_hm") or "09:00"
+                        ).split(":")[:2]
+                        refresh_m = int(rh) * 60 + int(rm)
+                    except Exception:
+                        refresh_m = 9 * 60
+                    day_key = now_ist.date().isoformat()
+                    if (
+                        refresh_m <= mins <= refresh_m + 2
+                        and getattr(self, "_morning_refresh_day", None) != day_key
+                    ):
+                        self._morning_refresh_day = day_key
+                        try:
+                            from foxtrade.auto_login import morning_logout_relogin
+
+                            res = morning_logout_relogin()
+                            self._auth_status = res
+                            with self.lock:
+                                self.notifications.append(
+                                    {
+                                        "ts": datetime.now(IST).isoformat(),
+                                        "message": (
+                                            f"Morning token refresh ok={res.get('ok')} "
+                                            f"new={res.get('new_saved_at') or res.get('saved_at')}"
+                                        ),
+                                    }
+                                )
+                                self.notifications = self.notifications[-50:]
+                        except Exception as exc:  # noqa: BLE001
+                            with self.lock:
+                                self.notifications.append(
+                                    {
+                                        "ts": datetime.now(IST).isoformat(),
+                                        "message": f"Morning token refresh failed: {exc}",
+                                    }
+                                )
+                                self.notifications = self.notifications[-50:]
+
+                # Soft pre-market auth check (08:30–09:14 IST weekdays)
                 if (
                     now_ist.weekday() < 5
                     and 8 * 60 + 30 <= mins < 9 * 60 + 15
@@ -1282,7 +1336,7 @@ class TradingEngine:
                     except Exception:
                         pass
                 index = self.market.index_context()
-                trade_flat = self.algo1.is_flat() and self.algo2.is_flat()
+                trade_flat = self.algo1.is_flat() and self.algo_cw.is_flat()
 
                 # Pre-score decay on current active hist (for rotate decision)
                 pair_preview = self.tracker.active
@@ -1339,9 +1393,9 @@ class TradingEngine:
                 if pair and ce_hist and pe_hist:
                     ce_ref = pair["ce"].get("ltp") or (ce_hist[0] if ce_hist else None)
                     pe_ref = pair["pe"].get("ltp") or (pe_hist[0] if pe_hist else None)
-                    if self.algo2.state.ce_entry and self.algo2.state.pe_entry:
-                        ce_ref = self.algo2.state.ce_entry
-                        pe_ref = self.algo2.state.pe_entry
+                    if self.algo_cw.state.ce_entry and self.algo_cw.state.pe_entry:
+                        ce_ref = self.algo_cw.state.ce_entry
+                        pe_ref = self.algo_cw.state.pe_entry
                     elif self.algo1.state.entry_price and self.algo1.state.open_symbol:
                         if self.algo1.state.open_symbol.endswith("CE"):
                             ce_ref = self.algo1.state.entry_price
@@ -1425,8 +1479,13 @@ class TradingEngine:
 
                 hb.beat(phase="tick", loop=loop_i, step="pre_dual")
                 # Convergence-only: skip FastTrack / dual books unless explicitly re-enabled
-                if self.config.get("algo1_enabled", False):
-                    if self.config.get("dual_mode"):
+                if self.config.get("algo1_enabled", False) or self.config.get(
+                    "algo1_convergence_dual", False
+                ):
+                    if self.config.get("algo1_convergence_dual", False):
+                        # Algo1 dual convergence + day-type (Algo-CW untouched)
+                        self.algo1_conv.on_tick(ctx)
+                    elif self.config.get("dual_mode"):
                         from foxtrade.indicators import ema as _ema
 
                         spot_closes = {
@@ -1489,16 +1548,16 @@ class TradingEngine:
                     else:
                         self.algo1.on_tick(ctx)
                 hb.beat(phase="tick", loop=loop_i, step="post_dual")
-                if self.config.get("algo2_enabled", True):
-                    self.algo2.on_tick(ctx)
+                if self.config.get("algo_cw_enabled", True):
+                    self.algo_cw.on_tick(ctx)
 
                 # Next-week convergence (46–54 @ 1.70×, max 1 setup) — separate book
-                if self.config.get("algo2nw_enabled", True):
+                if self.config.get("algo_nw_enabled", True):
                     try:
                         self._maybe_scan_next_week()
                         raw_scan = self.scan if isinstance(self.scan, dict) else {}
                         raw_nw = self.scan_nw if isinstance(self.scan_nw, dict) else {}
-                        pair_nw = Algo2Dual._normalize_pair(raw_nw.get("pair"))
+                        pair_nw = AlgoCwDual._normalize_pair(raw_nw.get("pair"))
                         ctx_nw = {
                             **ctx,
                             "pair": pair_nw,
@@ -1514,19 +1573,19 @@ class TradingEngine:
                                 ),
                             },
                         }
-                        self.algo2nw.on_tick(ctx_nw)
+                        self.algo_nw.on_tick(ctx_nw)
                         # Keep NW symbols on the quote watchlist
                         watch_nw = []
                         for side in ("CE", "PE"):
                             try:
-                                sym = Algo2Dual._pair_leg(pair_nw, side).get("tradingsymbol")
+                                sym = AlgoCwDual._pair_leg(pair_nw, side).get("tradingsymbol")
                                 if sym:
                                     watch_nw.append(sym)
                             except Exception:
                                 pass
                         for sym in (
-                            self.algo2nw.state.ce_symbol,
-                            self.algo2nw.state.pe_symbol,
+                            self.algo_nw.state.ce_symbol,
+                            self.algo_nw.state.pe_symbol,
                         ):
                             if sym:
                                 watch_nw.append(sym)
@@ -1534,7 +1593,7 @@ class TradingEngine:
                             self.market.set_watch(watch_nw, replace=False)
                     except Exception as exc:  # noqa: BLE001
                         self._push_activity_log(
-                            level="warn", message=f"algo2nw: {exc}"
+                            level="warn", message=f"algo_nw: {exc}"
                         )
 
                 # Parallel ATM CE/PE channel scan (alongside dual/fast-open).
@@ -1612,18 +1671,18 @@ class TradingEngine:
                             )
                 # Heartbeat lines — CW + NW Convergence (+ pulse so UI never freezes)
                 try:
-                    a2 = self.algo2.state
-                    line = f"CW {a2.phase} · {a2.last_message or ''}"
+                    a2 = self.algo_cw.state
+                    line = f"Algo-CW {a2.phase} · {a2.last_message or ''}"
                     self._push_activity_log(
-                        level="tick", message=line, pulse_sec=10.0, algo="algo2"
+                        level="tick", message=line, pulse_sec=10.0, algo="algo_cw"
                     )
                 except Exception:
                     pass
                 try:
-                    a2nw = self.algo2nw.state
-                    line = f"NW {a2nw.phase} · {a2nw.last_message or ''}"
+                    a2nw = self.algo_nw.state
+                    line = f"Algo-NW {a2nw.phase} · {a2nw.last_message or ''}"
                     self._push_activity_log(
-                        level="tick", message=line, pulse_sec=10.0, algo="algo2nw"
+                        level="tick", message=line, pulse_sec=10.0, algo="algo_nw"
                     )
                 except Exception:
                     pass
@@ -1661,16 +1720,16 @@ class TradingEngine:
         # While in a trade, lock chart pair to that strike (don't jump to another candidate)
         chart_pair = self._chart_pair_from_open(pair)
         a1 = self.algo1.snapshot(quotes)
-        a2 = self.algo2.snapshot(quotes)
-        a2nw = self.algo2nw.snapshot(quotes)
+        a2 = self.algo_cw.snapshot(quotes)
+        a2nw = self.algo_nw.snapshot(quotes)
         screen_band = {
             "low": cfg["premium_low"],
             "high": cfg["premium_high"],
             "source": "screen",
         }
         nw_band = {
-            "low": float(cfg.get("algo2nw_premium_low", 46) or 46),
-            "high": float(cfg.get("algo2nw_premium_high", 54) or 54),
+            "low": float(cfg.get("algo_nw_premium_low", 46) or 46),
+            "high": float(cfg.get("algo_nw_premium_high", 54) or 54),
             "source": "next_week",
         }
 
@@ -1724,8 +1783,8 @@ class TradingEngine:
         a2["convergence_band"] = zone if zone else screen_band
         a2nw["convergence_band"] = a2nw.get("convergence_zone") or nw_band
         # Prefer live_series from open NW book for its chart
-        if not a2nw.get("live_series") and self.algo2nw.state.live_series:
-            a2nw["live_series"] = self.algo2nw.state.live_series
+        if not a2nw.get("live_series") and self.algo_nw.state.live_series:
+            a2nw["live_series"] = self.algo_nw.state.live_series
 
         opens = trade_store.open_trades()
         for t in opens:
@@ -1882,12 +1941,12 @@ class TradingEngine:
             "activity_log_cw": [
                 r
                 for r in getattr(self, "_activity_log", [])
-                if (r.get("algo") or "algo2") != "algo2nw"
+                if (r.get("algo") or "algo_cw") != "algo_nw"
             ][-80:],
             "activity_log_nw": [
                 r
                 for r in getattr(self, "_activity_log", [])
-                if r.get("algo") == "algo2nw"
+                if r.get("algo") == "algo_nw"
             ][-80:],
             "engine_running": True,
             "scan": {
@@ -1914,8 +1973,13 @@ class TradingEngine:
                 "history_seeded_legs": self.scan.get("history_seeded_legs"),
             },
             "algo1": a1,
+            "algo_cw": a2,
+            "algo_nw": a2nw,
+            # legacy aliases for older dashboard tabs
             "algo2": a2,
             "algo2nw": a2nw,
+            "algo_names": {"cw": "Algo-CW", "nw": "Algo-NW"},
+            "build_id": BUILD_ID,
             "scan_nw": {
                 "current_expiry": (self.scan_nw or {}).get("current_expiry"),
                 "next_expiry": (self.scan_nw or {}).get("next_expiry"),
@@ -2242,13 +2306,13 @@ class TradingEngine:
             ),
             2,
         )
-        leg_cw = _leg("algo2", a2)
-        leg_nw = _leg("algo2nw", a2nw)
+        leg_cw = _leg("algo_cw", a2)
+        leg_nw = _leg("algo_nw", a2nw)
         headline_parts = []
-        if cfg.get("algo2_enabled", True):
-            headline_parts.append(f"CW {leg_cw['state']}")
-        if cfg.get("algo2nw_enabled", True):
-            headline_parts.append(f"NW {leg_nw['state']}")
+        if cfg.get("algo_cw_enabled", True):
+            headline_parts.append(f"Algo-CW {leg_cw['state']}")
+        if cfg.get("algo_nw_enabled", True):
+            headline_parts.append(f"Algo-NW {leg_nw['state']}")
         return {
             "mode": mode_lbl,
             "in_window": in_win,
@@ -2257,8 +2321,8 @@ class TradingEngine:
             "open_mtm": open_mtm,
             "open_invested": open_invested,
             "algo1": _leg("algo1", a1),
-            "algo2": leg_cw,
-            "algo2nw": leg_nw,
+            "algo_cw": leg_cw,
+            "algo_nw": leg_nw,
             "recent": [
                 {"ts": n.get("ts"), "message": n.get("message")}
                 for n in (getattr(self, "notifications", None) or [])[-8:]
@@ -2276,8 +2340,8 @@ class TradingEngine:
             return None
         ce_ref = pair["ce"].get("ltp") or ce_hist[0]
         pe_ref = pair["pe"].get("ltp") or pe_hist[0]
-        if self.algo2.state.ce_entry and self.algo2.state.pe_entry:
-            ce_ref, pe_ref = self.algo2.state.ce_entry, self.algo2.state.pe_entry
+        if self.algo_cw.state.ce_entry and self.algo_cw.state.pe_entry:
+            ce_ref, pe_ref = self.algo_cw.state.ce_entry, self.algo_cw.state.pe_entry
         reg = evaluate_pair_regime(
             ce_ltp=ce_hist[-1],
             pe_ltp=pe_hist[-1],

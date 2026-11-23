@@ -94,8 +94,8 @@
     </div>
     <div class="tabs" id="algoTabs">
       <button data-algo="all" class="active">All algos</button>
-      <button data-algo="algo2">Algo2 CW</button>
-      <button data-algo="algo2nw">Algo2 NW</button>
+      <button data-algo="algo_cw">Algo-CW</button>
+      <button data-algo="algo_nw">Algo-NW</button>
       <button data-algo="algo1">Algo1</button>
       <button data-algo="algo1_sx">Sensex</button>
     </div>
@@ -210,7 +210,7 @@
     let report = null;
     let period = "all"; // default: full retained history (paper + live)
     let mode = "combined"; // combined | paper | live
-    let algoFilter = "all"; // all | algo1 | algo2 | algo2nw | …
+    let algoFilter = "all"; // all | algo1 | algo_cw | algo_nw | …
     let customFrom = "";
     let customTo = "";
 
@@ -218,8 +218,8 @@
       return ({
         algo1: "Algo1",
         algo1_sx: "Sensex",
-        algo2: "Algo2 CW",
-        algo2nw: "Algo2 NW",
+        algo_cw: "Algo-CW",
+        algo_nw: "Algo-NW",
         all: "All algos",
       })[a] || String(a || "").toUpperCase();
     }
@@ -470,9 +470,9 @@
       ].join("");
 
       const algoNames = Object.keys(p.by_algo || {});
-      const algoOrder = ["algo2", "algo2nw", "algo1", "algo1_sx"].filter((a) => algoNames.includes(a))
-        .concat(algoNames.filter((a) => !["algo1", "algo1_sx", "algo2", "algo2nw"].includes(a)));
-      document.getElementById("algoCards").innerHTML = (algoOrder.length ? algoOrder : ["algo2", "algo2nw"]).map((a) => {
+      const algoOrder = ["algo_cw", "algo_nw", "algo1", "algo1_sx"].filter((a) => algoNames.includes(a))
+        .concat(algoNames.filter((a) => !["algo1", "algo1_sx", "algo_cw", "algo_nw"].includes(a)));
+      document.getElementById("algoCards").innerHTML = (algoOrder.length ? algoOrder : ["algo_cw", "algo_nw"]).map((a) => {
         const st = (p.by_algo || {})[a] || {};
         const active = algoFilter === a ? " style=\"outline:1px solid var(--accent)\"" : "";
         return `<div class="card"${active} data-pick-algo="${a}" style="cursor:pointer">
@@ -680,7 +680,7 @@
       render();
     }
 
-    // Deep-link: /reports?mode=live|paper|combined&algo=algo2|algo2nw|…
+    // Deep-link: /reports?mode=live|paper|combined&algo=algo_cw|algo_nw|…
     try {
       const sp = new URLSearchParams(location.search);
       const m = (sp.get("mode") || "").toLowerCase();
@@ -696,7 +696,7 @@
         });
       }
       const a = (sp.get("algo") || "").toLowerCase();
-      if (a && ["all", "algo1", "algo1_sx", "algo2", "algo2nw"].includes(a)) {
+      if (a && ["all", "algo1", "algo1_sx", "algo_cw", "algo_nw"].includes(a)) {
         algoFilter = a;
         document.querySelectorAll("#algoTabs button").forEach((b) => {
           b.classList.toggle("active", b.dataset.algo === algoFilter);

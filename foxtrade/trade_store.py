@@ -231,7 +231,7 @@ def today_entries_for_dashboard() -> list[dict[str, Any]]:
 
 
 def count_day_entries(algo: str, mode: str) -> int:
-    """Legacy: counts every trade row (Algo2 dual = 2). Prefer count_day_setups."""
+    """Legacy: counts every trade row (Algo-CW dual = 2). Prefer count_day_setups."""
     today = _now().date().isoformat()
     n = 0
     for t in list_trades():
@@ -387,7 +387,7 @@ def pnl_summary() -> dict[str, Any]:
         "by_algo": {
             "algo1": _bucket(),
             "algo1_sx": _bucket(),
-            "algo2": _bucket(),
+            "algo_cw": _bucket(),
         },
         "today_charges": 0.0,
         "today_gross": 0.0,
@@ -544,7 +544,7 @@ def report_details() -> dict[str, Any]:
     def _algo_keys(rows: list[dict[str, Any]]) -> list[str]:
         keys = sorted({str(t.get("algo") or "unknown") for t in rows if t.get("algo")})
         # Prefer dual-book order
-        prefer = ["algo1", "algo1_sx", "algo2"]
+        prefer = ["algo1", "algo1_sx", "algo_cw"]
         ordered = [k for k in prefer if k in keys]
         ordered += [k for k in keys if k not in ordered]
         return ordered or prefer[:2]
@@ -710,8 +710,10 @@ def report_filtered(
     """
     Custom duration report for paper / live / combined.
     date_from / date_to: YYYY-MM-DD inclusive (closed_at for closed, opened_at for open).
-    algo: optional filter (algo1 / algo2 / algo2nw / …); empty = all.
+    algo: optional filter (algo1 / algo_cw / algo_nw / …); empty = all.
     """
+    from foxtrade.algo_ids import matches
+
     base = report_details()
     mode = (mode or "combined").lower()
     if mode not in ("combined", "paper", "live"):
@@ -738,7 +740,7 @@ def report_filtered(
     def _algo_ok(t: dict[str, Any]) -> bool:
         if not algo_f or algo_f in ("all", "combined"):
             return True
-        return str(t.get("algo") or "").lower() == algo_f
+        return matches(t.get("algo"), algo_f)
 
     closed = [
         t
@@ -811,8 +813,8 @@ def report_filtered(
         "by_algo": {
             "algo1": _algo_slice("algo1"),
             "algo1_sx": _algo_slice("algo1_sx"),
-            "algo2": _algo_slice("algo2"),
-            "algo2nw": _algo_slice("algo2nw"),
+            "algo_cw": _algo_slice("algo_cw"),
+            "algo_nw": _algo_slice("algo_nw"),
         },
         "algo": algo_f or "all",
         "daily_series": [{"date": k, "pnl": by_day[k]} for k in sorted(by_day.keys())],

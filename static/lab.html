@@ -1,0 +1,996 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FoxtronTrade — Train Lab</title>
+  <script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
+  <style>
+    :root {
+      --bg: #0b1017; --panel: #141c27; --line: #243041; --text: #e8eef7;
+      --muted: #8fa0b8; --accent: #3d9cf0; --up: #26a69a; --down: #ef5350; --warn: #f0b429;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg); color: var(--text);
+    }
+    header {
+      display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+      padding: 10px 14px; background: var(--panel); border-bottom: 1px solid var(--line);
+      position: sticky; top: 0; z-index: 20;
+    }
+    h1 { font-size: 1.05rem; margin: 0; letter-spacing: 0.02em; }
+    .grow { flex: 1; }
+    a.nav {
+      color: var(--accent); text-decoration: none; font-size: 0.85rem;
+      padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px;
+    }
+    a.nav:hover { border-color: var(--accent); }
+    main {
+      max-width: 1240px; margin: 0 auto; padding: 14px;
+      display: grid; gap: 12px;
+    }
+    .panel {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px;
+    }
+    .panel h2 {
+      margin: 0 0 10px; font-size: 0.92rem; color: var(--muted); font-weight: 650;
+      text-transform: uppercase; letter-spacing: 0.04em;
+    }
+    .row { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; }
+    label {
+      display: flex; flex-direction: column; gap: 4px;
+      font-size: 0.75rem; color: var(--muted);
+    }
+    input, select, button {
+      background: #1c2736; color: var(--text); border: 1px solid var(--line);
+      border-radius: 6px; padding: 8px 10px; font-size: 0.85rem;
+    }
+    input[type=number] { width: 88px; }
+    button { cursor: pointer; font-weight: 600; }
+    button:hover { border-color: var(--accent); }
+    button.ok { background: #163328; border-color: #2a6; }
+    button.warn { background: #2a2410; border-color: var(--warn); color: var(--warn); }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .hint { color: var(--muted); font-size: 0.8rem; margin-top: 8px; }
+    .days { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .chip {
+      font-size: 0.72rem; padding: 3px 8px; border-radius: 999px;
+      border: 1px solid var(--line); color: var(--muted);
+    }
+    .chip.on { color: #fff; background: #1e3a5f; border-color: var(--accent); }
+    .kpi {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px;
+      margin-bottom: 10px;
+    }
+    .kpi .box {
+      background: #0f1620; border: 1px solid var(--line); border-radius: 8px; padding: 10px;
+    }
+    .kpi .box .k { font-size: 0.7rem; color: var(--muted); }
+    .kpi .box .v { font-size: 1.05rem; font-weight: 700; margin-top: 2px; }
+    .pos { color: var(--up); } .neg { color: var(--down); }
+    table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+    th { color: var(--muted); font-weight: 600; background: var(--panel); }
+    .scroll { max-height: 420px; overflow: auto; }
+    tr.best { background: rgba(38, 166, 154, 0.12); }
+    tr:hover { background: rgba(61, 156, 240, 0.08); }
+    #status { min-height: 1.2em; font-size: 0.85rem; color: var(--muted); }
+    #status.err { color: var(--down); }
+    #status.ok { color: var(--up); }
+    .two {
+      display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px;
+    }
+    @media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
+    .day-card {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+      padding: 14px; scroll-margin-top: 64px;
+    }
+    .day-head {
+      display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: baseline;
+      margin-bottom: 10px;
+    }
+    .day-head h3 { margin: 0; font-size: 1.05rem; }
+    .day-head .meta { color: var(--muted); font-size: 0.8rem; }
+    .chart-box {
+      height: 320px; width: 100%;
+      background: #0f1620; border: 1px solid var(--line); border-radius: 8px;
+      margin-bottom: 12px;
+    }
+    .chart-legend {
+      display: flex; flex-wrap: wrap; gap: 8px;
+      font-size: 0.75rem; color: var(--muted); margin: -4px 0 10px;
+      align-items: center;
+    }
+    .chart-legend .hint-inline { color: var(--muted); margin-left: 4px; }
+    .leg-tog {
+      cursor: pointer; user-select: none;
+      border: 1px solid var(--line); border-radius: 999px;
+      padding: 3px 10px; background: #1c2736; font-weight: 600;
+    }
+    .leg-tog:hover { border-color: var(--accent); }
+    .leg-tog.on { opacity: 1; }
+    .leg-tog.off {
+      opacity: 0.4; text-decoration: line-through;
+      background: #121820;
+    }
+    .leg-tog.ce.on { color: var(--down); border-color: rgba(239,83,80,0.55); }
+    .leg-tog.pe.on { color: var(--up); border-color: rgba(38,166,154,0.55); }
+    .leg-tog.spot.on { color: var(--accent); border-color: rgba(61,156,240,0.55); }
+    .leg-tog.band.on { color: var(--warn); border-color: rgba(240,180,41,0.55); }
+    .leg-tog.markers.on { color: #c5d0e0; border-color: #4b5d75; }
+    .toc {
+      display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px;
+    }
+    .toc a {
+      font-size: 0.75rem; color: var(--accent); text-decoration: none;
+      border: 1px solid var(--line); border-radius: 999px; padding: 3px 9px;
+    }
+    .toc a:hover { border-color: var(--accent); }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Train Lab</h1>
+    <span class="hint" id="weekHint">Loading weeks…</span>
+    <div class="grow"></div>
+    <a class="nav" href="/">Dashboard</a>
+    <a class="nav" href="/playback">Playback</a>
+    <a class="nav" href="/reports">Reports</a>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>Data &amp; convergence</h2>
+      <div class="row">
+        <label>Underlying
+          <select id="underlying"></select>
+        </label>
+        <label>Algo (project)
+          <select id="algo"></select>
+        </label>
+        <label>History
+          <select id="preset">
+            <option value="current">Current week</option>
+            <option value="past">Past week</option>
+            <option value="all">All days</option>
+            <option value="custom">Custom (selected chips)</option>
+          </select>
+        </label>
+        <label>Band low
+          <input id="bandLo" type="number" step="1" value="70" />
+        </label>
+        <label>Band high
+          <input id="bandHi" type="number" step="1" value="77" />
+        </label>
+        <label>Exit ×
+          <input id="winMult" type="number" step="0.05" value="1.45" />
+        </label>
+        <label>Max setups
+          <input id="maxSetups" type="number" step="1" min="1" max="3" value="2" />
+        </label>
+        <label>Skip 2nd ≥ ₹
+          <input id="skipGe" type="number" step="500" value="3000" />
+        </label>
+        <label title="Also test nearby band widths">Band sweep
+          <select id="bandSweep">
+            <option value="0">Off</option>
+            <option value="1">On</option>
+          </select>
+        </label>
+      </div>
+      <div class="days" id="dayChips"></div>
+      <div class="row" style="margin-top:12px">
+        <button class="ok" id="btnAnalyze">Analyze / Project</button>
+        <button class="ok" id="btnTrain">Train Algo</button>
+        <button class="ok" id="btnFallen" title="3–4d falling channel → breakout · SL−12 / TP+30…50">Fallen channel scan</button>
+        <button class="warn" id="btnPromote" disabled>Promote to live</button>
+      </div>
+      <p class="hint">Pick underlying + algo (or All to project every live algo). Analyze → day charts/tables. Train one algo, then Promote. Fallen channel scan scores multi-day descending-channel breakouts across premium bands.</p>
+      <div id="status"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Summary</h2>
+      <div class="kpi" id="kpi"></div>
+      <div id="bestLabel" class="hint">Run Analyze or Train to see results.</div>
+      <div class="toc" id="dayToc"></div>
+    </section>
+
+    <section class="panel hidden" id="fallenPanel">
+      <h2>Fallen channel breakout</h2>
+      <p class="hint" id="fallenHint">3–4 session descending channel → break above upper rail · SL −12 · TP +30 / +40 / +50</p>
+      <div class="kpi" id="fallenKpi"></div>
+      <div class="two" style="margin-top:12px">
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr><th>#</th><th>Filter</th><th>Band</th><th>TP</th><th>n</th><th>WR</th><th>Avg</th><th>R</th><th>PF</th></tr>
+            </thead>
+            <tbody id="fallenTop"></tbody>
+          </table>
+        </div>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr><th>Band</th><th>n</th><th>TP30 avg</th><th>TP40 avg</th><th>TP50 avg</th><th>WR40</th></tr>
+            </thead>
+            <tbody id="fallenBands"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="scroll" style="margin-top:12px; max-height:320px">
+        <table>
+          <thead>
+            <tr>
+              <th>Entry</th><th>Side</th><th>Strike</th><th>Px</th><th>Band</th><th>Dist</th>
+              <th>Fall</th><th>TP30</th><th>TP40</th><th>TP50</th><th>Flags</th>
+            </tr>
+          </thead>
+          <tbody id="fallenTrades"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <div id="dayReports"></div>
+
+    <div class="two" id="trainPanels">
+      <section class="panel">
+        <h2>Policy ranking</h2>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th><th>Rule</th><th>Band</th><th>Net</th><th>G/R</th><th>Worst</th>
+              </tr>
+            </thead>
+            <tbody id="rows"></tbody>
+          </table>
+        </div>
+      </section>
+      <section class="panel">
+        <h2>Support / resistance</h2>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr><th>Day</th><th>Spot</th><th>Support</th><th>Resistance</th><th>Range</th></tr>
+            </thead>
+            <tbody id="sr"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    let weeks = null;
+    let lastPayload = null;
+    let selectedWinner = null;
+    let fillingSelects = false;
+    const chartHandles = [];
+
+    const $ = (id) => document.getElementById(id);
+    const fmt = (n, d = 0) => {
+      if (n == null || Number.isNaN(Number(n))) return "—";
+      return Number(n).toLocaleString("en-IN", { maximumFractionDigits: d, minimumFractionDigits: d > 0 ? Math.min(d, 2) : 0 });
+    };
+    const money = (n) => {
+      if (n == null || Number.isNaN(Number(n))) return "—";
+      const v = Number(n);
+      const s = "₹" + Math.abs(v).toLocaleString("en-IN", { maximumFractionDigits: 0 });
+      return v < 0 ? ("-" + s) : s;
+    };
+    const px = (n) => (n == null || Number.isNaN(Number(n))) ? "—" : Number(n).toFixed(1);
+    const pts = (n) => {
+      if (n == null || Number.isNaN(Number(n))) return "—";
+      const v = Number(n);
+      const abs = Math.abs(v).toFixed(2);
+      if (v > 0) return `+${abs} pts`;
+      if (v < 0) return `-${abs} pts`;
+      return `0.00 pts`;
+    };
+    const ptsCls = (n) => {
+      const v = Number(n);
+      if (!Number.isFinite(v) || v === 0) return "";
+      return v > 0 ? "pos" : "neg";
+    };
+
+    function setStatus(msg, cls) {
+      const el = $("status");
+      el.textContent = msg || "";
+      el.className = cls || "";
+    }
+
+    function selectedDays() {
+      const preset = $("preset").value;
+      if (preset !== "custom") return null;
+      return [...document.querySelectorAll(".chip.on")].map((c) => c.dataset.day);
+    }
+
+    function renderChips() {
+      const box = $("dayChips");
+      box.innerHTML = "";
+      if (!weeks) return;
+      const preset = $("preset").value;
+      let active = new Set();
+      if (preset === "current") active = new Set(weeks.presets.current || []);
+      else if (preset === "past") active = new Set(weeks.presets.past || []);
+      else if (preset === "all") active = new Set(weeks.presets.all || []);
+      else {
+        active = new Set([...document.querySelectorAll(".chip.on")].map((c) => c.dataset.day));
+        if (!active.size) active = new Set(weeks.presets.current || []);
+      }
+      for (const d of (weeks.days || [])) {
+        const el = document.createElement("button");
+        el.type = "button";
+        el.className = "chip" + (active.has(d) ? " on" : "");
+        el.dataset.day = d;
+        el.textContent = d.slice(5);
+        el.title = d;
+        el.onclick = () => {
+          if ($("preset").value !== "custom") $("preset").value = "custom";
+          el.classList.toggle("on");
+          updateHint();
+        };
+        box.appendChild(el);
+      }
+      updateHint();
+    }
+
+    function updateHint() {
+      if (!weeks) return;
+      const preset = $("preset").value;
+      let days = [];
+      if (preset === "custom") days = selectedDays() || [];
+      else days = weeks.presets[preset] || [];
+      const cur = weeks.current_week;
+      const past = weeks.past_week;
+      $("weekHint").textContent =
+        `${weeks.underlying || "NIFTY"} · ${weeks.algo || "algo_cw"}` +
+        (cur ? ` · Current exp ${cur.expiry} (${cur.day_count}d)` : " · No current week") +
+        (past ? ` · Past exp ${past.expiry} (${past.day_count}d)` : "") +
+        ` · ${days.length} day(s)`;
+    }
+
+    function fillCatalogSelects() {
+      if (!weeks) return;
+      fillingSelects = true;
+      const uSel = $("underlying");
+      const aSel = $("algo");
+      const curU = uSel.value || weeks.underlying || "NIFTY";
+      const curA = aSel.value || weeks.algo || "algo_cw";
+      uSel.innerHTML = "";
+      for (const u of (weeks.underlyings || [])) {
+        const opt = document.createElement("option");
+        opt.value = u.id;
+        opt.textContent = `${u.id}${u.days_cw || u.days_nw ? ` (${u.days_cw || 0} CW / ${u.days_nw || 0} NW)` : ""}`;
+        if (u.id === curU) opt.selected = true;
+        uSel.appendChild(opt);
+      }
+      if (![...uSel.options].some((o) => o.selected) && uSel.options.length) {
+        uSel.options[0].selected = true;
+      }
+      aSel.innerHTML = "";
+      for (const a of (weeks.algos || [])) {
+        const opt = document.createElement("option");
+        opt.value = a.id;
+        opt.textContent = a.label;
+        if (a.id === curA) opt.selected = true;
+        aSel.appendChild(opt);
+      }
+      if (![...aSel.options].some((o) => o.selected) && aSel.options.length) {
+        aSel.options[0].selected = true;
+      }
+      fillingSelects = false;
+      applyAlgoDefaults();
+    }
+
+    function applyAlgoDefaults() {
+      const aid = $("algo").value;
+      const meta = (weeks && weeks.algos || []).find((a) => a.id === aid);
+      if (!meta || aid === "all") return;
+      if (meta.default_band_lo != null) $("bandLo").value = meta.default_band_lo;
+      if (meta.default_band_hi != null) $("bandHi").value = meta.default_band_hi;
+      if (meta.default_win_mult != null) $("winMult").value = meta.default_win_mult;
+      if (meta.default_max_setups != null) $("maxSetups").value = meta.default_max_setups;
+      if (meta.default_skip_ge != null && meta.default_skip_ge < 1e17) {
+        $("skipGe").value = meta.default_skip_ge;
+      } else if (aid === "algo_nw") {
+        $("skipGe").value = 999999;
+      }
+      $("btnTrain").disabled = aid === "all";
+      $("btnPromote").disabled = aid === "all" || !selectedWinner;
+    }
+
+    function renderKpi(row, dayReports) {
+      if (!row) {
+        $("kpi").innerHTML = "";
+        return;
+      }
+      const cls = (n) => (n > 0 ? "pos" : n < 0 ? "neg" : "");
+      const totalPts = (dayReports || []).reduce((s, d) => s + Number(d.pair_pts || 0), 0);
+      const hasPts = (dayReports || []).some((d) => d.pair_pts != null);
+      $("kpi").innerHTML = `
+        <div class="box"><div class="k">Net ₹</div><div class="v ${cls(row.net)}">${money(row.net)}</div></div>
+        ${hasPts ? `<div class="box"><div class="k">Pair points</div><div class="v ${ptsCls(totalPts)}">${pts(totalPts)}</div></div>` : ""}
+        <div class="box"><div class="k">Green / Red</div><div class="v">${row.green}G / ${row.red}R</div></div>
+        <div class="box"><div class="k">Worst day</div><div class="v ${cls(row.worst)}">${money(row.worst)}</div></div>
+        <div class="box"><div class="k">Best day</div><div class="v ${cls(row.best)}">${money(row.best)}</div></div>
+        <div class="box"><div class="k">Band</div><div class="v">${(row.band || []).join("–") || "—"}</div></div>
+      `;
+      $("bestLabel").textContent = row.label || "";
+    }
+
+    function renderRows(rows, bestLabel) {
+      const tb = $("rows");
+      tb.innerHTML = "";
+      (rows || []).forEach((r, i) => {
+        const tr = document.createElement("tr");
+        if (bestLabel && r.label === bestLabel) tr.className = "best";
+        tr.innerHTML = `
+          <td>${i + 1}</td>
+          <td>${r.label || ""}</td>
+          <td>${(r.band || []).join("–")}</td>
+          <td class="${r.net > 0 ? "pos" : r.net < 0 ? "neg" : ""}">${money(r.net)}</td>
+          <td>${r.green}G/${r.red}R</td>
+          <td class="${r.worst < 0 ? "neg" : ""}">${money(r.worst)}</td>
+        `;
+        tr.onclick = () => {
+          selectedWinner = r;
+          renderKpi(r);
+          $("btnPromote").disabled = false;
+          setStatus("Selected: " + r.label, "ok");
+        };
+        tb.appendChild(tr);
+      });
+    }
+
+    function renderSr(sr) {
+      const tb = $("sr");
+      tb.innerHTML = "";
+      (sr || []).forEach((r) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${r.day}</td>
+          <td>${fmt(r.spot_last)}</td>
+          <td>${fmt(r.support)}</td>
+          <td>${fmt(r.resistance)}</td>
+          <td>${fmt(r.range)}</td>
+        `;
+        tb.appendChild(tr);
+      });
+    }
+
+    function toTime(dayStr, hm) {
+      if (!dayStr || !hm) return null;
+      const [y, m, d] = dayStr.split("-").map(Number);
+      const parts = String(hm).split(":");
+      const hh = Number(parts[0] || 0);
+      const mm = Number(parts[1] || 0);
+      return Math.floor(Date.UTC(y, m - 1, d, hh, mm) / 1000);
+    }
+
+    function destroyCharts() {
+      while (chartHandles.length) {
+        const c = chartHandles.pop();
+        try { c.remove(); } catch (_) {}
+      }
+    }
+
+    function renderDayChart(el, day, chart, legendEl) {
+      if (!el || !chart || typeof LightweightCharts === "undefined") return;
+      const c = LightweightCharts.createChart(el, {
+        layout: { background: { color: "#0f1620" }, textColor: "#8fa0b8" },
+        grid: { vertLines: { color: "#243041" }, horzLines: { color: "#243041" } },
+        rightPriceScale: { borderColor: "#243041" },
+        leftPriceScale: { visible: true, borderColor: "#243041" },
+        timeScale: { borderColor: "#243041", timeVisible: true, secondsVisible: false },
+        width: el.clientWidth,
+        height: el.clientHeight,
+        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+      });
+      chartHandles.push(c);
+
+      const mapPts = (pts) => (pts || [])
+        .map((p) => {
+          const t = toTime(day, p.t);
+          if (t == null || p.v == null) return null;
+          return { time: t, value: Number(p.v) };
+        })
+        .filter(Boolean);
+
+      const ceData = mapPts(chart.ce);
+      const peData = mapPts(chart.pe);
+      const spotData = mapPts(chart.spot);
+
+      const ceSeries = c.addLineSeries({
+        color: "#ef5350", lineWidth: 2, title: `CE ${chart.ce_strike ?? ""}`,
+        priceScaleId: "right",
+      });
+      const peSeries = c.addLineSeries({
+        color: "#26a69a", lineWidth: 2, title: `PE ${chart.pe_strike ?? ""}`,
+        priceScaleId: "right",
+      });
+      const spotSeries = c.addLineSeries({
+        color: "#3d9cf0", lineWidth: 1, title: "Index",
+        priceScaleId: "left",
+        lastValueVisible: true,
+      });
+      ceSeries.setData(ceData);
+      peSeries.setData(peData);
+      spotSeries.setData(spotData);
+
+      // Band as separate dashed series so it can toggle independently
+      const bandSeriesList = [];
+      const band = chart.band || [];
+      const bandTimes = (ceData.length ? ceData : peData.length ? peData : spotData).map((p) => p.time);
+      for (const lvl of band) {
+        if (lvl == null || !bandTimes.length) continue;
+        const bs = c.addLineSeries({
+          color: "rgba(240,180,41,0.75)",
+          lineWidth: 1,
+          lineStyle: LightweightCharts.LineStyle.Dashed,
+          priceScaleId: "right",
+          lastValueVisible: true,
+          priceLineVisible: false,
+          title: `band ${lvl}`,
+        });
+        bs.setData(bandTimes.map((t) => ({ time: t, value: Number(lvl) })));
+        bandSeriesList.push(bs);
+      }
+
+      const markers = [];
+      for (const m of (chart.markers || [])) {
+        const t = toTime(day, m.t);
+        if (t == null) continue;
+        const buy = m.kind === "buy";
+        markers.push({
+          time: t,
+          position: buy ? "belowBar" : "aboveBar",
+          color: buy ? "#3d9cf0" : "#f0b429",
+          shape: buy ? "arrowUp" : "arrowDown",
+          text: m.text || (buy ? "BUY" : "EXIT"),
+        });
+      }
+      markers.sort((a, b) => a.time - b.time);
+      if (markers.length) ceSeries.setMarkers(markers);
+
+      const visibility = { ce: true, pe: true, spot: true, band: true, markers: true };
+      const applyVis = () => {
+        ceSeries.applyOptions({ visible: visibility.ce });
+        peSeries.applyOptions({ visible: visibility.pe });
+        spotSeries.applyOptions({ visible: visibility.spot });
+        for (const bs of bandSeriesList) bs.applyOptions({ visible: visibility.band });
+        ceSeries.setMarkers(visibility.markers && visibility.ce ? markers : []);
+      };
+
+      if (legendEl) {
+        legendEl.querySelectorAll("[data-toggle]").forEach((btn) => {
+          btn.classList.add("on");
+          btn.classList.remove("off");
+          btn.onclick = () => {
+            const key = btn.dataset.toggle;
+            if (!key || !(key in visibility)) return;
+            visibility[key] = !visibility[key];
+            btn.classList.toggle("on", visibility[key]);
+            btn.classList.toggle("off", !visibility[key]);
+            applyVis();
+          };
+        });
+      }
+
+      c.timeScale().fitContent();
+      new ResizeObserver(() => {
+        c.applyOptions({ width: el.clientWidth, height: el.clientHeight });
+      }).observe(el);
+    }
+
+    function setupTableHtml(setups, dayNet, dayCharges, dayGross, dayPairPts) {
+      if (!setups || !setups.length) {
+        return `<p class="hint">No merge / no trade this day.</p>`;
+      }
+      const rows = setups.map((s) => `
+        <tr>
+          <td>#${s.setup_id ?? "—"}</td>
+          <td>
+            <div><b>Buy</b> ${s.entry_t || "—"}</div>
+            <div class="hint" style="margin:0">Index ${fmt(s.index_entry, 1)}</div>
+          </td>
+          <td>
+            CE ${s.ce_strike ?? "—"} @ ${px(s.ce_entry)}<br/>
+            PE ${s.pe_strike ?? "—"} @ ${px(s.pe_entry)}
+            <div class="hint" style="margin:0">ATM ${s.atm ?? "—"} · mid ${px(s.mid)} · gap ${px(s.gap)}</div>
+          </td>
+          <td>${s.lots ?? "—"} lot × ${s.lot_size ?? "—"} = ${s.qty ?? "—"}</td>
+          <td>
+            <div><b>Exit</b> ${s.exit_t || "—"}</div>
+            <div class="hint" style="margin:0">Index ${fmt(s.index_exit, 1)}${s.index_pts != null ? ` · <span class="${ptsCls(s.index_pts)}">${pts(s.index_pts)}</span>` : ""}</div>
+          </td>
+          <td>
+            CE ${px(s.ce_exit)} (${s.ce_mult != null ? Number(s.ce_mult).toFixed(2) + "×" : "—"})
+            <span class="${ptsCls(s.ce_pts)}">${pts(s.ce_pts)}</span><br/>
+            PE ${px(s.pe_exit)} (${s.pe_mult != null ? Number(s.pe_mult).toFixed(2) + "×" : "—"})
+            <span class="${ptsCls(s.pe_pts)}">${pts(s.pe_pts)}</span>
+            <div class="hint" style="margin:0">${s.win_side || ""} · ${s.exit_why || ""}</div>
+          </td>
+          <td class="${ptsCls(s.pair_pts)}"><b>${pts(s.pair_pts)}</b></td>
+          <td class="${Number(s.gross) >= 0 ? "pos" : "neg"}">${money(s.gross)}</td>
+          <td>${money(s.charges)}</td>
+          <td class="${Number(s.net) >= 0 ? "pos" : "neg"}"><b>${money(s.net)}</b></td>
+        </tr>
+      `).join("");
+      return `
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Buy time / Index</th>
+              <th>Strikes / Entry</th>
+              <th>Size</th>
+              <th>Exit time / Index</th>
+              <th>Exit premiums / pts</th>
+              <th>Pair pts</th>
+              <th>Gross</th>
+              <th>Charges</th>
+              <th>Net ₹</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+          <tfoot>
+            <tr>
+              <td colspan="6"><b>Day total</b></td>
+              <td class="${ptsCls(dayPairPts)}"><b>${pts(dayPairPts)}</b></td>
+              <td class="${Number(dayGross) >= 0 ? "pos" : "neg"}"><b>${money(dayGross)}</b></td>
+              <td><b>${money(dayCharges)}</b></td>
+              <td class="${Number(dayNet) >= 0 ? "pos" : "neg"}"><b>${money(dayNet)}</b></td>
+            </tr>
+          </tfoot>
+        </table>
+      `;
+    }
+
+    function renderDayReports(reports) {
+      destroyCharts();
+      const box = $("dayReports");
+      const toc = $("dayToc");
+      box.innerHTML = "";
+      toc.innerHTML = "";
+      if (!reports || !reports.length) return;
+
+      reports.forEach((rep) => {
+        const id = `day-${rep.day}`;
+        const a = document.createElement("a");
+        a.href = `#${id}`;
+        a.textContent = `${rep.day.slice(5)} ${money(rep.net)} · ${pts(rep.pair_pts)}`;
+        toc.appendChild(a);
+
+        const card = document.createElement("section");
+        card.className = "day-card";
+        card.id = id;
+        const sr = rep.sr || {};
+        const ch = rep.chart || {};
+        const algoTag = rep.algo_label || rep.algo || "";
+        card.innerHTML = `
+          <div class="day-head">
+            <h3>${rep.day}${algoTag ? " · " + algoTag : ""}</h3>
+            <span class="meta">${rep.setup_count || 0} setup(s)</span>
+            <span class="meta">Gross ${money(rep.gross)} · Charges ${money(rep.charges)}</span>
+            <span class="meta ${Number(rep.net) >= 0 ? "pos" : "neg"}"><b>Net ${money(rep.net)}</b></span>
+            <span class="meta ${ptsCls(rep.pair_pts)}"><b>${pts(rep.pair_pts)}</b> (CE ${pts(rep.ce_pts)} · PE ${pts(rep.pe_pts)})</span>
+            <span class="meta">S ${fmt(sr.support)} / R ${fmt(sr.resistance)}</span>
+            ${rep.note ? `<span class="meta">${rep.note}</span>` : ""}
+          </div>
+          <div class="chart-legend">
+            <button type="button" class="leg-tog ce on" data-toggle="ce">CE ${ch.ce_strike ?? "—"}</button>
+            <button type="button" class="leg-tog pe on" data-toggle="pe">PE ${ch.pe_strike ?? "—"}</button>
+            <button type="button" class="leg-tog spot on" data-toggle="spot">Index</button>
+            <button type="button" class="leg-tog band on" data-toggle="band">Band ${(ch.band || []).join("–") || "—"}</button>
+            <button type="button" class="leg-tog markers on" data-toggle="markers">▲▼ Markers</button>
+            <span class="hint-inline">click to show / hide</span>
+          </div>
+          <div class="chart-box" data-day="${rep.day}"></div>
+          ${setupTableHtml(rep.setups, rep.net, rep.charges, rep.gross, rep.pair_pts)}
+        `;
+        box.appendChild(card);
+        const el = card.querySelector(".chart-box");
+        const legend = card.querySelector(".chart-legend");
+        requestAnimationFrame(() => renderDayChart(el, rep.day, ch, legend));
+      });
+    }
+
+    function applyPayload(data) {
+      lastPayload = data;
+      const best = data.best || data.result;
+      selectedWinner = best;
+      renderKpi(best, data.day_reports || []);
+      const isAnalyze = data.kind === "analyze";
+      $("trainPanels").classList.toggle("hidden", isAnalyze && !!(data.day_reports || []).length);
+      if (!isAnalyze) {
+        const rows = data.rows || (data.result ? [data.result] : []);
+        renderRows(rows, best && best.label);
+        renderSr(data.sr || []);
+        renderDayReports([]);
+      } else {
+        renderRows(data.result ? [data.result] : [], best && best.label);
+        renderSr(data.sr || []);
+        renderDayReports(data.day_reports || []);
+      }
+      $("btnPromote").disabled = !best;
+    }
+
+    function pnlCell(o) {
+      if (!o) return "—";
+      const v = Number(o.pnl);
+      const cls = ptsCls(v);
+      const label = `${o.exit || "?"}:${v >= 0 ? "+" : ""}${v}`;
+      return `<span class="${cls}">${label}</span>`;
+    }
+
+    function renderFallen(data) {
+      const panel = $("fallenPanel");
+      if (!data || !data.ok || data.kind !== "fallen_channel") {
+        panel.classList.add("hidden");
+        return;
+      }
+      panel.classList.remove("hidden");
+      const s = data.summary || {};
+      const p = data.params || {};
+      const r = data.result || {};
+      const bare40 = r.bare_tp40 || {};
+      const bare50 = r.bare_tp50 || {};
+      $("fallenHint").textContent =
+        `3–4d descending channel · SL −${p.sl ?? 12} · TP ${(p.tp || [30, 40, 50]).join("/")} · ` +
+        `entry days ${(data.entry_days || []).length} · instruments ${p.instruments ?? "—"} · ` +
+        `fall windows ${p.fall_windows ?? 0} · channels ${p.tradable_channels ?? 0}`;
+      $("fallenKpi").innerHTML = `
+        <div class="box"><div class="k">Breakouts (30–130)</div><div class="v">${s.n_trades_band_30_130 ?? 0}</div></div>
+        <div class="box"><div class="k">All premiums</div><div class="v">${s.n_trades_all ?? 0}</div></div>
+        <div class="box"><div class="k">CE / PE</div><div class="v">${(s.by_side || {}).CE || 0} / ${(s.by_side || {}).PE || 0}</div></div>
+        <div class="box"><div class="k">Bare TP40</div><div class="v ${ptsCls(bare40.avg_pnl)}">${bare40.n ? `${Math.round((bare40.win_rate || 0) * 100)}% · ${bare40.avg_pnl >= 0 ? "+" : ""}${bare40.avg_pnl}` : "—"}</div></div>
+        <div class="box"><div class="k">Bare TP50</div><div class="v ${ptsCls(bare50.avg_pnl)}">${bare50.n ? `${Math.round((bare50.win_rate || 0) * 100)}% · ${bare50.avg_pnl >= 0 ? "+" : ""}${bare50.avg_pnl}` : "—"}</div></div>
+        <div class="box"><div class="k">Top setup</div><div class="v" style="font-size:0.95rem">${r.top ? `${r.top.filter} · ${r.top.band} · tp${r.top.tp}` : "—"}</div></div>
+      `;
+      const topBody = $("fallenTop");
+      topBody.innerHTML = "";
+      (s.top_setups || []).slice(0, 20).forEach((row, i) => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${i + 1}</td>
+          <td>${row.filter}</td>
+          <td>${row.band}</td>
+          <td>+${row.tp}</td>
+          <td>${row.n}</td>
+          <td>${Math.round((row.win_rate || 0) * 100)}%</td>
+          <td class="${ptsCls(row.avg_pnl)}">${row.avg_pnl >= 0 ? "+" : ""}${row.avg_pnl}</td>
+          <td class="${ptsCls(row.expectancy_R)}">${row.expectancy_R >= 0 ? "+" : ""}${row.expectancy_R}R</td>
+          <td>${row.profit_factor}</td>`;
+        topBody.appendChild(tr);
+      });
+      const bandBody = $("fallenBands");
+      bandBody.innerHTML = "";
+      const byBand = s.by_band || {};
+      for (const band of Object.keys(byBand)) {
+        const bare = (byBand[band].filters || {}).bare || {};
+        const c30 = bare["30"] || {};
+        const c40 = bare["40"] || {};
+        const c50 = bare["50"] || {};
+        if (!(c30.n || c40.n || c50.n)) continue;
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${band}</td>
+          <td>${byBand[band].n_signals || 0}</td>
+          <td class="${ptsCls(c30.avg_pnl)}">${c30.n ? (c30.avg_pnl >= 0 ? "+" : "") + c30.avg_pnl : "—"}</td>
+          <td class="${ptsCls(c40.avg_pnl)}">${c40.n ? (c40.avg_pnl >= 0 ? "+" : "") + c40.avg_pnl : "—"}</td>
+          <td class="${ptsCls(c50.avg_pnl)}">${c50.n ? (c50.avg_pnl >= 0 ? "+" : "") + c50.avg_pnl : "—"}</td>
+          <td>${c40.n ? Math.round((c40.win_rate || 0) * 100) + "%" : "—"}</td>`;
+        bandBody.appendChild(tr);
+      }
+      const tbody = $("fallenTrades");
+      tbody.innerHTML = "";
+      (data.trades || []).forEach((t) => {
+        const flags = Object.keys(t.filters || {}).filter((k) => t.filters[k] && k !== "bare").slice(0, 6).join(", ");
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${String(t.entry_ts || "").slice(5, 16)}</td>
+          <td>${t.side}</td>
+          <td>${t.strike}</td>
+          <td>${t.entry_px}</td>
+          <td>${t.band}</td>
+          <td>${t.break_dist}</td>
+          <td>${t.fall_days}d · ${Math.round(t.fall_drop_pct || 0)}%</td>
+          <td>${pnlCell((t.outcomes || {}).tp30)}</td>
+          <td>${pnlCell((t.outcomes || {}).tp40)}</td>
+          <td>${pnlCell((t.outcomes || {}).tp50)}</td>
+          <td class="hint" style="max-width:220px;white-space:normal">${flags || "—"}</td>`;
+        tbody.appendChild(tr);
+      });
+      panel.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+
+    async function loadWeeks(preserveLast) {
+      const u = $("underlying").value || "NIFTY";
+      const a = $("algo").value || "algo_cw";
+      const res = await fetch(`/api/lab/weeks?underlying=${encodeURIComponent(u)}&algo=${encodeURIComponent(a === "all" ? "algo_cw" : a)}`);
+      weeks = await res.json();
+      fillCatalogSelects();
+      // Keep user algo selection if "all"
+      if (a === "all") {
+        fillingSelects = true;
+        $("algo").value = "all";
+        fillingSelects = false;
+        applyAlgoDefaults();
+      }
+      renderChips();
+      if (!preserveLast && weeks.last_run && weeks.last_run.ok) applyPayload(weeks.last_run);
+      if (!preserveLast && weeks.last_fallen && weeks.last_fallen.ok) renderFallen(weeks.last_fallen);
+    }
+
+    async function onCatalogChange() {
+      if (fillingSelects) return;
+      applyAlgoDefaults();
+      await loadWeeks(true);
+    }
+
+    function bodyBase() {
+      const algo = $("algo").value;
+      const body = {
+        algo,
+        underlying: $("underlying").value || "NIFTY",
+        preset: $("preset").value,
+        days: selectedDays(),
+      };
+      // For "all", server uses each algo's live defaults; still send band for single-algo runs
+      if (algo !== "all") {
+        body.band_lo = Number($("bandLo").value);
+        body.band_hi = Number($("bandHi").value);
+        body.win_mult = Number($("winMult").value);
+        body.max_setups = Number($("maxSetups").value);
+        body.skip_2nd_if_net_ge = Number($("skipGe").value);
+      }
+      return body;
+    }
+
+    async function runAnalyze() {
+      setStatus("Analyzing / projecting…");
+      $("btnAnalyze").disabled = true;
+      try {
+        const body = {
+          ...bodyBase(),
+          mode: "hit",
+        };
+        const res = await fetch("/api/lab/analyze", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "analyze failed");
+        applyPayload(data);
+        const projN = (data.projects || []).filter((p) => p.ok).length;
+        setStatus(
+          `Done · ${data.underlying || "NIFTY"} · ${data.algo_label || data.algo}` +
+          (projN ? ` · ${projN} algo(s) projected` : "") +
+          ` · ${ (data.days || []).length } day(s) · net ${money((data.result || {}).net)}`,
+          "ok"
+        );
+        const first = (data.day_reports || [])[0];
+        if (first) {
+          const el = document.getElementById(`day-${first.day}`);
+          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      } catch (e) {
+        setStatus(String(e.message || e), "err");
+      } finally {
+        $("btnAnalyze").disabled = false;
+      }
+    }
+
+    async function runTrain() {
+      setStatus("Training… this can take a minute");
+      $("btnTrain").disabled = true;
+      $("btnPromote").disabled = true;
+      try {
+        const body = {
+          ...bodyBase(),
+          band_sweep: $("bandSweep").value === "1",
+        };
+        const res = await fetch("/api/lab/train", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "train failed");
+        applyPayload(data);
+        const b = data.best;
+        setStatus(
+          `Train ready · ${data.policies_tested} policies · best ${b.label} · ${money(b.net)} · ${b.green}G/${b.red}R`,
+          "ok"
+        );
+      } catch (e) {
+        setStatus(String(e.message || e), "err");
+      } finally {
+        $("btnTrain").disabled = false;
+      }
+    }
+
+    async function runPromote() {
+      if (!selectedWinner) return;
+      if (!confirm("Promote winning rule into live config and reload engine?")) return;
+      setStatus("Promoting…");
+      $("btnPromote").disabled = true;
+      try {
+        const res = await fetch("/api/lab/promote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            algo: $("algo").value === "all" ? "algo_cw" : $("algo").value,
+            winner: selectedWinner,
+            use_last_best: false,
+            reload_engine: true,
+          }),
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "promote failed");
+        setStatus(
+          `Promoted ${data.winner.label} → live (${data.engine}) · net was ${money(data.winner.net)}`,
+          "ok"
+        );
+      } catch (e) {
+        setStatus(String(e.message || e), "err");
+        $("btnPromote").disabled = false;
+      }
+    }
+
+    async function runFallenScan() {
+      setStatus("Scanning fallen channels across selected history…");
+      $("btnFallen").disabled = true;
+      try {
+        const body = {
+          ...bodyBase(),
+          include_db: true,
+        };
+        // Prefer explicit preset days when not custom
+        if (!body.days) {
+          const preset = $("preset").value;
+          if (weeks && weeks.presets && preset !== "custom") {
+            body.days = weeks.presets[preset] || weeks.presets.all || [];
+          }
+        }
+        const res = await fetch("/api/lab/fallen-channel", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || "fallen-channel scan failed");
+        renderFallen(data);
+        const s = data.summary || {};
+        const bare = ((s.overall_band_30_130 || {}).bare || {})["40"] || {};
+        setStatus(
+          `Fallen scan · ${s.n_trades_band_30_130 || 0} in-band breakouts` +
+          (bare.n ? ` · bare TP40 ${Math.round((bare.win_rate || 0) * 100)}% avg ${bare.avg_pnl >= 0 ? "+" : ""}${bare.avg_pnl}` : "") +
+          ` · ${(data.entry_days || []).length} entry day(s)`,
+          "ok"
+        );
+      } catch (e) {
+        setStatus(String(e.message || e), "err");
+      } finally {
+        $("btnFallen").disabled = false;
+      }
+    }
+
+    $("preset").onchange = renderChips;
+    $("underlying").onchange = onCatalogChange;
+    $("algo").onchange = onCatalogChange;
+    $("btnAnalyze").onclick = runAnalyze;
+    $("btnTrain").onclick = runTrain;
+    $("btnFallen").onclick = runFallenScan;
+    $("btnPromote").onclick = runPromote;
+    loadWeeks(false).catch((e) => setStatus(String(e), "err"));
+  </script>
+</body>
+</html>

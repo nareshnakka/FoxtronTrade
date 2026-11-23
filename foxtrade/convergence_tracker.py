@@ -684,8 +684,8 @@ class ConvergenceTracker:
             self.locked_merge = False
             self.switch_reason = "dropped expiry-day active — select next week"
 
-        # No merge lock before algo2_merge_after (default 09:20 IST)
-        merge_after = str(cfg.get("algo2_merge_after") or "09:20")
+        # No merge lock before algo_cw_merge_after (default 09:20 IST)
+        merge_after = str(cfg.get("algo_cw_merge_after") or "09:20")
         now_hm = datetime.now(IST).strftime("%H:%M")
         if now_hm < merge_after and not self.locked_for_trade:
             self.active = None

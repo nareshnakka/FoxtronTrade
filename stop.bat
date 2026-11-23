@@ -1,33 +1,35 @@
 @echo off
 setlocal EnableExtensions
 cd /d "%~dp0"
-title FoxtronTrade — Stop
-
-set "ROOT=%~dp0"
+title FoxtronTrade - Stop
 
 echo.
 echo ============================================
-echo   FoxtronTrade — Stop
+echo   FoxtronTrade - Stop
 echo ============================================
 echo.
 
-echo Stopping engine / dashboard...
-powershell -NoProfile -Command ^
-  "Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" -EA SilentlyContinue | ForEach-Object { " ^
-  "  if ($_.CommandLine -and ($_.CommandLine -like '*run_unattended.py*' -or $_.CommandLine -like '*\\app.py*' -or $_.CommandLine -like '* app.py*')) { " ^
-  "    Stop-Process -Id $_.ProcessId -Force -EA SilentlyContinue " ^
-  "  } " ^
-  "}; " ^
-  "foreach ($p in 5050,5000) { " ^
-  "  Get-NetTCPConnection -LocalPort $p -EA SilentlyContinue | ForEach-Object { " ^
-  "    Stop-Process -Id $_.OwningProcess -Force -EA SilentlyContinue " ^
-  "  } " ^
-  "}"
+if exist "%~dp0.venv\Scripts\python.exe" (
+  "%~dp0.venv\Scripts\python.exe" "%~dp0tools_stop_start.py" stop
+  echo.
+  echo Status after stop:
+  "%~dp0.venv\Scripts\python.exe" "%~dp0tools_stop_start.py" status
+) else (
+  echo Stopping via taskkill fallback...
+  powershell -NoProfile -Command ^
+    "Get-CimInstance Win32_Process -Filter \"Name='python.exe'\" -EA SilentlyContinue | ForEach-Object { " ^
+    "  if ($_.CommandLine -and ($_.CommandLine -like '*run_unattended.py*' -or $_.CommandLine -like '*app.py*')) { " ^
+    "    taskkill /F /T /PID $_.ProcessId 2>$null " ^
+    "  } " ^
+    "}; " ^
+    "Get-NetTCPConnection -LocalPort 5050,5000 -ErrorAction SilentlyContinue | ForEach-Object { " ^
+    "  taskkill /F /T /PID $_.OwningProcess 2>$null " ^
+    "}; " ^
+    "if (Test-Path '%~dp0data\unattended.lock') { Remove-Item -Force '%~dp0data\unattended.lock' }"
+)
 
-if exist "%ROOT%data\unattended.lock" del /f /q "%ROOT%data\unattended.lock" >nul 2>&1
-timeout /t 1 /nobreak >nul
-
-echo Stopped.
+echo.
+echo Stopped. You can close this window.
 echo.
 pause
 exit /b 0

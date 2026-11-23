@@ -33,7 +33,7 @@ def _cfg_fingerprint(cfg: dict[str, Any]) -> str:
         for k in cfg
         if k.startswith(
             (
-                "algo2_",
+                "algo_cw_",
                 "early_winner_",
                 "convergence_",
                 "breakout_",
@@ -48,10 +48,10 @@ def _cfg_fingerprint(cfg: dict[str, Any]) -> str:
         or k
         in (
             "lot_size",
-            "algo2_lots",
-            "algo2_enabled",
-            "algo2_breakout_only",
-            "algo2_breakout_hard_gap",
+            "algo_cw_lots",
+            "algo_cw_enabled",
+            "algo_cw_breakout_only",
+            "algo_cw_breakout_hard_gap",
             "live_trading",
             "playback_chart_atm",
             "playback_chart_ce_strike",
@@ -87,18 +87,18 @@ def simulate_day_live(day: str, *, cfg: dict[str, Any] | None = None) -> dict[st
     sim = simulate_day(day, cfg)
     sim["auto_replay"] = True
     sim["algo_fp"] = fp
-    # Attach same-day live/paper algo2 fills for side-by-side review
+    # Attach same-day live/paper Algo-CW fills for side-by-side review
     try:
         trades_path = ROOT / "data" / "trades.json"
         if trades_path.exists():
             all_tr = json.loads(trades_path.read_text(encoding="utf-8"))
-            merge_after = str(cfg.get("algo2_merge_after") or "09:20")
+            merge_after = str(cfg.get("algo_cw_merge_after") or "09:20")
             live = [
                 t
                 for t in all_tr
                 if isinstance(t, dict)
                 and str(t.get("opened_at") or "").startswith(day)
-                and t.get("algo") == "algo2"
+                and t.get("algo") == "algo_cw"
             ]
             rows = []
             for t in live:
@@ -146,10 +146,10 @@ def week_summary_live(*, cfg: dict[str, Any] | None = None) -> dict[str, Any]:
         if _week_summary is not None and _week_fp == fp and _week_summary.get("available_days") == days:
             return _week_summary
 
-    mode = "breakout_only" if cfg.get("algo2_breakout_only", True) else "dual"
+    mode = "breakout_only" if cfg.get("algo_cw_breakout_only", True) else "dual"
     week: dict[str, Any] = {
         "mode": mode,
-        "algo": "algo2",
+        "algo": "algo_cw",
         "algo_fp": fp,
         "auto_replay": True,
         "days": [],

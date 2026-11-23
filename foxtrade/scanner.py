@@ -515,7 +515,7 @@ def scan_next_week_premium_band(
 ) -> dict[str, Any]:
     """
     Scan NEXT weekly expiry only (not current trade week) for CE/PE merge band.
-    Used by Convergence Next-Week (algo2nw) alongside current-week algo2.
+    Used by Algo-NW (algo_nw) alongside current-week Algo-CW.
     """
     kite = get_authenticated_kite()
     spot = float(_ltp_timed(kite, ["NSE:NIFTY 50"])["NSE:NIFTY 50"]["last_price"])

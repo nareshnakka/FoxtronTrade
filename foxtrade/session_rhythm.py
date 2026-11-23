@@ -1,7 +1,7 @@
 """
 Prior-session expansion rhythm from multi-day spot candles.
 
-Purpose: answer "were the last 2-3 sessions quiet?" before an Algo2 entry.
+Purpose: answer "were the last 2-3 sessions quiet?" before an Algo-CW entry.
 Measured on Nifty index data, not option premiums, because expired option
 premium history is unavailable. A session is classified by one-way excursion
 from its open — the move a long straddle leg actually gets to harvest.

@@ -186,6 +186,149 @@ def merge_lock_page():
     return redirect("/option-chain-filter")
 
 
+@app.get("/lab")
+def lab_page():
+    return send_from_directory(app.static_folder, "lab.html")
+
+
+@app.get("/api/lab/weeks")
+def lab_weeks():
+    from foxtrade.lab_fallen_channel import load_last_fallen
+    from foxtrade.lab_train import list_weeks, load_last_run
+
+    underlying = str(request.args.get("underlying") or "NIFTY")
+    algo = str(request.args.get("algo") or "algo_cw")
+    out = list_weeks(underlying=underlying, algo=algo)
+    out["last_run"] = load_last_run()
+    out["last_fallen"] = load_last_fallen()
+    return jsonify(out)
+
+
+@app.get("/api/lab/last")
+def lab_last():
+    from foxtrade.lab_train import load_last_run
+
+    return jsonify(load_last_run() or {"ok": False, "error": "no run yet"})
+
+
+@app.post("/api/lab/analyze")
+def lab_analyze():
+    from foxtrade.lab_train import analyze
+
+    body = request.get_json(force=True, silent=True) or {}
+
+    def _opt_float(key, default=None):
+        if key not in body or body.get(key) is None or body.get(key) == "":
+            return default
+        return float(body.get(key))
+
+    def _opt_int(key, default=None):
+        if key not in body or body.get(key) is None or body.get(key) == "":
+            return default
+        return int(body.get(key))
+
+    return jsonify(
+        analyze(
+            algo=str(body.get("algo") or "algo_cw"),
+            underlying=str(body.get("underlying") or "NIFTY"),
+            preset=str(body.get("preset") or "current"),
+            days=body.get("days"),
+            band_lo=_opt_float("band_lo"),
+            band_hi=_opt_float("band_hi"),
+            win_mult=_opt_float("win_mult"),
+            max_setups=_opt_int("max_setups"),
+            skip_2nd_if_net_ge=_opt_float("skip_2nd_if_net_ge"),
+            mode=str(body.get("mode") or "hit"),
+            retrace_pct=float(body.get("retrace_pct") or 0),
+        )
+    )
+
+
+@app.post("/api/lab/train")
+def lab_train_api():
+    from foxtrade.lab_train import train
+
+    body = request.get_json(force=True, silent=True) or {}
+    exit_mults = body.get("exit_mults")
+    if exit_mults is not None:
+        try:
+            exit_mults = [float(x) for x in exit_mults]
+        except Exception:
+            exit_mults = None
+
+    def _opt_float(key, default=None):
+        if key not in body or body.get(key) is None or body.get(key) == "":
+            return default
+        return float(body.get(key))
+
+    return jsonify(
+        train(
+            algo=str(body.get("algo") or "algo_cw"),
+            underlying=str(body.get("underlying") or "NIFTY"),
+            preset=str(body.get("preset") or "current"),
+            days=body.get("days"),
+            band_lo=_opt_float("band_lo"),
+            band_hi=_opt_float("band_hi"),
+            band_sweep=bool(body.get("band_sweep")),
+            exit_mults=exit_mults,
+        )
+    )
+
+
+@app.post("/api/lab/promote")
+def lab_promote():
+    from foxtrade.lab_train import promote
+
+    body = request.get_json(force=True, silent=True) or {}
+    return jsonify(
+        promote(
+            algo=body.get("algo"),
+            winner=body.get("winner"),
+            use_last_best=bool(body.get("use_last_best", True)),
+            reload_engine=bool(body.get("reload_engine", True)),
+        )
+    )
+
+
+@app.get("/api/lab/fallen-channel")
+def lab_fallen_channel_last():
+    from foxtrade.lab_fallen_channel import load_last_fallen
+
+    return jsonify(load_last_fallen() or {"ok": False, "error": "no fallen-channel run yet"})
+
+
+@app.post("/api/lab/fallen-channel")
+def lab_fallen_channel_scan():
+    """Scan multi-day falling-channel breakouts (SL-12 / TP+30..50) for Lab."""
+    from foxtrade.lab_fallen_channel import run_scan
+    from foxtrade.lab_train import list_weeks
+
+    body = request.get_json(force=True, silent=True) or {}
+    underlying = str(body.get("underlying") or "NIFTY")
+    algo = str(body.get("algo") or "algo_cw")
+    if algo == "all":
+        algo = "algo_cw"
+    preset = str(body.get("preset") or "all")
+    days = body.get("days")
+    if not days:
+        weeks = list_weeks(underlying=underlying, algo=algo)
+        if preset == "custom":
+            days = weeks.get("presets", {}).get("all") or []
+        else:
+            days = weeks.get("presets", {}).get(preset) or weeks.get("presets", {}).get("all") or []
+    try:
+        return jsonify(
+            run_scan(
+                days=list(days) if days else None,
+                preset=preset,
+                include_db=bool(body.get("include_db", True)),
+                persist=True,
+            )
+        )
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(exc)}), 500
+
+
 @app.get("/playback")
 def playback_page():
     return send_from_directory(app.static_folder, "playback_dashboard.html")
@@ -431,7 +574,20 @@ def learn_now():
 
 @app.get("/api/state")
 def state():
-    return jsonify(ENGINE.dashboard_state())
+    st = ENGINE.dashboard_state()
+    # Always expose last Kite login time from access_token.json (idle path used to drop it)
+    try:
+        auth = dict(st.get("auth") or {})
+        if not auth.get("saved_at"):
+            from kite_client import load_token_meta
+
+            meta = load_token_meta() or {}
+            if meta.get("saved_at"):
+                auth["saved_at"] = meta.get("saved_at")
+                st["auth"] = auth
+    except Exception:
+        pass
+    return jsonify(st)
 
 
 @app.get("/api/option_chain_db")
@@ -573,6 +729,63 @@ def option_chain_db_atm_premiums():
         return jsonify(snap)
     except Exception as exc:  # noqa: BLE001
         return jsonify({"error": str(exc)}), 500
+
+
+@app.get("/api/option_chain_db/strike_series")
+def option_chain_db_strike_series():
+    """
+    History for up to 6 CE/PE strikes, locked to one expiry week.
+    Query: week, expiry, legs=CE:25500,PE:25500 (max 6),
+           scope=expiry|day (default expiry = all days for that expiry),
+           day? (required if scope=day), time_from?, time_to?
+    """
+    try:
+        from foxtrade.config_store import load_config
+        from foxtrade.option_chain_db import db_from_config
+
+        week = str(request.args.get("week") or "current")
+        expiry = str(request.args.get("expiry") or "").strip()
+        scope = str(request.args.get("scope") or "expiry").strip().lower()
+        day = str(request.args.get("day") or "").strip() or None
+        if scope == "day" and not day:
+            return jsonify({"ok": False, "error": "day required when scope=day"}), 400
+        if scope != "day":
+            day = None  # full expiry-week history from available capture
+        legs_raw = str(request.args.get("legs") or "").strip()
+        legs: list[dict] = []
+        for part in legs_raw.split(","):
+            part = part.strip()
+            if not part or ":" not in part:
+                continue
+            side, strike_s = part.split(":", 1)
+            try:
+                legs.append({"side": side.strip().upper(), "strike": int(strike_s)})
+            except Exception:
+                continue
+        if not expiry and day:
+            # Infer expiry from a snapshot tick for that day/week
+            snap = db_from_config(load_config()).query_snapshot(
+                day=day, week=week, moneyness="atm", depth=0
+            )
+            expiry = str(
+                (snap.get("next_expiry") if week == "next" else snap.get("current_expiry"))
+                or ""
+            )[:10]
+        if not expiry:
+            return jsonify({"ok": False, "error": "expiry required"}), 400
+        out = db_from_config(load_config()).strike_premium_series(
+            week=week,
+            expiry=expiry,
+            legs=legs,
+            day=day,
+            time_from=request.args.get("time_from") or None,
+            time_to=request.args.get("time_to") or None,
+            max_legs=6,
+            resample=str(request.args.get("resample") or "1m"),
+        )
+        return jsonify(out)
+    except Exception as exc:  # noqa: BLE001
+        return jsonify({"ok": False, "error": str(exc)}), 500
 
 
 @app.get("/api/option_chain_db/query")

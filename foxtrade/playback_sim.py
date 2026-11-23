@@ -219,7 +219,7 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
         return {"day": day, "error": "no frames", "frames": [], "trades": [], "summary": {}}
 
     lot_size = int(cfg.get("lot_size", 65) or 65)
-    lots = int(cfg.get("algo2_lots", 4))
+    lots = int(cfg.get("algo_cw_lots", 4))
     lean_lots = int(cfg.get("early_winner_lean_add_lots", 1))
     band_lo = float(cfg.get("premium_low", 125))
     band_hi = float(cfg.get("premium_high", 145))
@@ -277,10 +277,10 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
     tl_f_strike: int | None = None
     tl_w_side: str | None = None
     tl_f_side: str | None = None
-    tl_buffer = float(cfg.get("algo2_breakout_tl_buffer", 1.5))
-    tl_lookback = int(cfg.get("algo2_breakout_tl_lookback", 12))
-    tl_from_start = bool(cfg.get("algo2_breakout_tl_from_day_start", True))
-    tl_enabled = bool(cfg.get("algo2_breakout_tl_enabled", True))
+    tl_buffer = float(cfg.get("algo_cw_breakout_tl_buffer", 1.5))
+    tl_lookback = int(cfg.get("algo_cw_breakout_tl_lookback", 12))
+    tl_from_start = bool(cfg.get("algo_cw_breakout_tl_from_day_start", True))
+    tl_enabled = bool(cfg.get("algo_cw_breakout_tl_enabled", True))
 
     ce_hi_tl: dict[str, Any] | None = None
     ce_lo_tl: dict[str, Any] | None = None
@@ -369,7 +369,7 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
             return None, None
         bi = max(1, len(closes) - 1)
         # Rolling window channel (like screenshot) — not full-day megaphone
-        ch_look = int(cfg.get("algo2_channel_lookback_bars", 60) or 60)
+        ch_look = int(cfg.get("algo_cw_channel_lookback_bars", 60) or 60)
         ch = fit_premium_channel(
             closes,
             break_i=bi,
@@ -437,8 +437,8 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
         nonlocal tl_w_side
         st.breakout_side = side
         _refresh_ce_pe_channels(fi_now)
-    reject_higher = bool(cfg.get("algo2_reject_higher_remerge", True))
-    higher_buf = float(cfg.get("algo2_higher_remerge_buffer", 2.0))
+    reject_higher = bool(cfg.get("algo_cw_reject_higher_remerge", True))
+    higher_buf = float(cfg.get("algo_cw_higher_remerge_buffer", 2.0))
     band_break_side: str | None = None
     band_break_count = 0
     last_zone: dict[str, Any] | None = None
@@ -449,7 +449,7 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
     atm_series_for_pipe: list[dict[str, Any]] = []
     atm_frozen_pipe: dict[str, Any] | None = None
     atm_last_zone: dict[str, Any] | None = None
-    hard_gap = float(cfg.get("algo2_breakout_hard_gap", 12.0))
+    hard_gap = float(cfg.get("algo_cw_breakout_hard_gap", 12.0))
     chart_atm = bool(cfg.get("playback_chart_atm", False))
     atm_pipe_gap = float(cfg.get("convergence_pipe_gap", 12.0))
     band_pair = None
@@ -530,8 +530,8 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
             atm_ce_hist.append(float(gate_info["ce_atm"]))
             atm_pe_hist.append(float(gate_info["pe_atm"]))
 
-        # Lock once when gate ok — only after algo2_merge_after (default 09:20)
-        merge_after = str(cfg.get("algo2_merge_after") or "09:20")
+        # Lock once when gate ok — only after algo_cw_merge_after (default 09:20)
+        merge_after = str(cfg.get("algo_cw_merge_after") or "09:20")
         if (
             not locked_pair
             and gate.get("ok")
@@ -758,7 +758,7 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
                         }
 
             # --- SCAN: watch merge → buy BREAKOUT side only (default) ---
-            breakout_only = cfg.get("algo2_breakout_only", True)
+            breakout_only = cfg.get("algo_cw_breakout_only", True)
             if st.phase == "SCAN" and locked_pair:
                 if gap <= merge_gap and band_lo <= mid <= band_hi:
                     # Higher same-day re-merge than first conv = decay — do not arm
@@ -802,7 +802,7 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
                 if watching:
                     # Breakout-only: mid+N first, else rail/hard + confirm
                     if breakout_only:
-                        entry_pts = float(cfg.get("algo2_entry_above_conv_pts", 12.0) or 0)
+                        entry_pts = float(cfg.get("algo_cw_entry_above_conv_pts", 12.0) or 0)
                         mid_fired = False
                         if entry_pts > 0:
                             mid_hit = detect_entry_above_convergence(
@@ -834,7 +834,7 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
                         if not mid_fired and not (
                             entry_pts > 0 and last_convergence_mid is not None
                         ):
-                            confirm_n = int(cfg.get("algo2_break_confirm_points", 3))
+                            confirm_n = int(cfg.get("algo_cw_break_confirm_points", 3))
                             force = None
                             # One-sided quotes: still allow PE/CE leader
                             if ce_px is not None and pe_px is not None and gap >= hard_gap:
@@ -854,7 +854,7 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
                                 ce=ce_px,
                                 pe=pe_px,
                                 hist_len=max(len(series_for_pipe), 1),
-                                buffer=float(cfg.get("algo2_break_rail_buffer", 1.0)),
+                                buffer=float(cfg.get("algo_cw_break_rail_buffer", 1.0)),
                                 confirm_points=confirm_n,
                                 confirm_side=rail_confirm_side,
                                 confirm_count=rail_confirm_count,
@@ -953,7 +953,7 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
 
                 if breakout_only and side in ("CE", "PE"):
                     px = ce_px if side == "CE" else pe_px
-                    entry_pts = float(cfg.get("algo2_entry_above_conv_pts", 12.0) or 0)
+                    entry_pts = float(cfg.get("algo_cw_entry_above_conv_pts", 12.0) or 0)
                     band_ceil = band_hi
                     if entry_pts > 0 and last_convergence_mid is not None:
                         band_ceil = max(
@@ -1078,7 +1078,7 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
                                 }
                 elif (
                     not breakout_only
-                    and t >= str(cfg.get("algo2_merge_after") or "09:20")
+                    and t >= str(cfg.get("algo_cw_merge_after") or "09:20")
                     and merge_streak >= 2
                     and gate.get("ok")
                     and ce_px is not None
@@ -1575,8 +1575,8 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
                 book_reason = None
                 # SL only after leave, then fall-back to last convergence mid
                 conv_mid = last_convergence_mid if last_convergence_mid is not None else st.mid_at_entry
-                leave = float(cfg.get("algo2_sl_leave_pts", 3.0))
-                sl_below = float(cfg.get("algo2_sl_below_convergence", 0.0))
+                leave = float(cfg.get("algo_cw_sl_leave_pts", 3.0))
+                sl_below = float(cfg.get("algo_cw_sl_below_convergence", 0.0))
                 if (
                     conv_mid is not None
                     and st.breakout_peak is not None
@@ -1703,9 +1703,9 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
                                 f"{a.get('break_dir')} {a.get('level')}"
                             )
                             if (
-                                cfg.get("algo2_fallen_rev_flip", True)
+                                cfg.get("algo_cw_fallen_rev_flip", True)
                                 and f_side in ("CE", "PE")
-                                and cfg.get("algo2_breakout_only", True)
+                                and cfg.get("algo_cw_breakout_only", True)
                             ):
                                 reverse_flip = True
                                 reverse_side = str(f_side)
@@ -1714,7 +1714,7 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
                     if mult >= expand_cap and px >= t_hi:
                         book_reason = f"expand stretch {mult:.1f}x"
 
-                if book_reason is None and cfg.get("algo2_rail_reverse_enabled", True):
+                if book_reason is None and cfg.get("algo_cw_rail_reverse_enabled", True):
                     zone = None
                     if last_zone or frozen_pipe:
                         zone = last_zone or {
@@ -1728,8 +1728,8 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
                         ce=ce_px,
                         pe=pe_px,
                         hist_len=max(len(series_for_pipe), 1),
-                        buffer=float(cfg.get("algo2_break_rail_buffer", 1.0)),
-                        confirm_points=int(cfg.get("algo2_break_confirm_points", 3)),
+                        buffer=float(cfg.get("algo_cw_break_rail_buffer", 1.0)),
+                        confirm_points=int(cfg.get("algo_cw_break_confirm_points", 3)),
                         confirm_side=reverse_confirm_side,
                         confirm_count=reverse_confirm_count,
                         winner_px_hist=reverse_winner_px,
@@ -1757,7 +1757,7 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
                         book_reason = str(
                             rr.get("reason") or f"rail reverse → {reverse_side}"
                         )
-                        reverse_flip = bool(cfg.get("algo2_rail_reverse_flip", True))
+                        reverse_flip = bool(cfg.get("algo_cw_rail_reverse_flip", True))
 
                 if book_reason:
                     _close_side(legs, b, t, px, book_reason)
@@ -1768,7 +1768,7 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
                     )
                     # Flip-buy only in breakout-only mode; dual already holds fallen
                     can_flip = (
-                        bool(cfg.get("algo2_breakout_only", True))
+                        bool(cfg.get("algo_cw_breakout_only", True))
                         and reverse_flip
                         and reverse_side in ("CE", "PE")
                         and flip_px is not None
@@ -1859,7 +1859,7 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
                         reverse_confirm_side = None
                         reverse_confirm_count = 0
                         reverse_winner_px = []
-                        if cfg.get("algo2_breakout_only", True):
+                        if cfg.get("algo_cw_breakout_only", True):
                             # Preserve lock symbols for next cycle; reset phase
                             keep_ce, keep_pe = st.ce_sym, st.pe_sym
                             keep_cs, keep_ps = st.ce_strike, st.pe_strike
@@ -1894,7 +1894,7 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
                         f"tgt {t_lo:g}–{t_hi:g}{arm_txt}{rev_txt}"
                     )
 
-            elif st.phase == "FALLEN_HOLD" and not cfg.get("algo2_breakout_only", True):
+            elif st.phase == "FALLEN_HOLD" and not cfg.get("algo_cw_breakout_only", True):
                 f_side = st.fallen_side
                 f_px = pe_px if f_side == "PE" else ce_px
                 f_entry = st.pe_entry if f_side == "PE" else st.ce_entry
@@ -1929,7 +1929,7 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
                             f"{trendline_value(down_tl, fi):.1f}"
                         )
                     elif (
-                        cfg.get("algo2_fallen_ride_enabled", True)
+                        cfg.get("algo_cw_fallen_ride_enabled", True)
                         and f_side in ("CE", "PE")
                         and up_from_low >= bounce
                         and float(f_px) >= mid_ref - 2.0
@@ -1960,7 +1960,7 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
                         reason = "fallen deep crush ≤50"
                     elif f_px <= stop_line:
                         reason = "fallen SL"
-                    elif not cfg.get("algo2_fallen_ride_enabled", True):
+                    elif not cfg.get("algo_cw_fallen_ride_enabled", True):
                         if up_from_low >= bounce:
                             reason = f"fallen reverse +{up_from_low:.0f} from low"
                         elif f_px >= mid_ref - 2.0:
@@ -2008,7 +2008,7 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
         if (
             st.phase == "DUAL_OPEN"
             and not tl_enabled
-            and not cfg.get("algo2_breakout_only", True)
+            and not cfg.get("algo_cw_breakout_only", True)
             and ((ce_px is None) ^ (pe_px is None))
             and last_ce_px is not None
             and last_pe_px is not None
@@ -2056,7 +2056,7 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
         # One-sided fallen hold (only fallen leg still quoting)
         if (
             st.phase == "FALLEN_HOLD"
-            and not cfg.get("algo2_breakout_only", True)
+            and not cfg.get("algo_cw_breakout_only", True)
             and st.fallen_side in ("CE", "PE")
             and ((ce_px is None) ^ (pe_px is None))
         ):
@@ -2107,10 +2107,10 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
             locked_pair
             and st.phase == "SCAN"
             and merge_armed
-            and cfg.get("algo2_breakout_only", True)
+            and cfg.get("algo_cw_breakout_only", True)
             and ((ce_px is None) ^ (pe_px is None))
         ):
-            confirm_n = int(cfg.get("algo2_break_confirm_points", 3))
+            confirm_n = int(cfg.get("algo_cw_break_confirm_points", 3))
             zone = last_zone or (
                 {
                     "pipe": (frozen_pipe or {}).get("pipe"),
@@ -2131,7 +2131,7 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
                 ce=ce_px,
                 pe=pe_px,
                 hist_len=hist_len_1s,
-                buffer=float(cfg.get("algo2_break_rail_buffer", 1.0)),
+                buffer=float(cfg.get("algo_cw_break_rail_buffer", 1.0)),
                 confirm_points=confirm_n,
                 confirm_side=rail_confirm_side,
                 confirm_count=rail_confirm_count,
@@ -2471,7 +2471,7 @@ def simulate_day(day: str, cfg: dict[str, Any]) -> dict[str, Any]:
             }
         )
 
-    mode = "breakout_only" if cfg.get("algo2_breakout_only", True) else "dual"
+    mode = "breakout_only" if cfg.get("algo_cw_breakout_only", True) else "dual"
     summary = {
         "day": day,
         "expiry": meta.get("expiry"),

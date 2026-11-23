@@ -1,8 +1,8 @@
 """
 Walk-forward dual BT at ₹1L capital for both books (all available days).
 
-  Algo1 / Current-week Convergence: 70–77 merge · exit 1.45× · max 2/day
-  Algo2 / Next-week Convergence:    46–54 merge · exit 1.70× · max 1/day
+  Algo-CW / Current-week: 70–77 merge · exit 1.45× · max 2/day
+  Algo-NW / Next-week:    46–54 merge · exit 1.70× · max 1/day
 
 Sizing: capital × 90% / ((CE+PE) × lot). Causal — no look-ahead.
 """
@@ -244,7 +244,7 @@ def main() -> None:
         out_txt=OUT_DIR / "bt_1L_algo1_cw_daily.txt",
     )
 
-    # —— Algo2 / Next week ——
+    # —— Algo-CW / Next week ——
     nw_days = nw.available_days()
     print(f"\nNW days: {len(nw_days)} → {nw_days[0] if nw_days else '—'} … {nw_days[-1] if nw_days else '—'}")
     nw_daily = []
@@ -253,21 +253,21 @@ def main() -> None:
         nw_daily.append(simulate_nw_day(d, fr, meta, lot_size=lot_size, cfg=cfg))
 
     nw_rep = _write(
-        label="Algo2 Next-Week",
-        strategy="algo2_nw_46_54_1.70x_1L_max1",
+        label="Algo-NW",
+        strategy="algo_nw_46_54_1.70x_1L_max1",
         daily=nw_daily,
         band=NW_BAND,
         win_mult=NW_MULT,
         max_setups=NW_MAX,
-        out_json=OUT_DIR / "bt_1L_algo2_nw_daily.json",
-        out_txt=OUT_DIR / "bt_1L_algo2_nw_daily.txt",
+        out_json=OUT_DIR / "bt_1L_algo_nw_daily.json",
+        out_txt=OUT_DIR / "bt_1L_algo_nw_daily.txt",
     )
 
     # Combined summary
     combined = {
         "capital": CAPITAL,
         "algo1_cw": cw_rep["summary"],
-        "algo2_nw": nw_rep["summary"],
+        "algo_nw": nw_rep["summary"],
         "combined_net": round(
             float(cw_rep["summary"]["net"]) + float(nw_rep["summary"]["net"]), 2
         ),

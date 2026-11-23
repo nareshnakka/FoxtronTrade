@@ -13,13 +13,14 @@ from __future__ import annotations
 from typing import Any
 
 from foxtrade import trade_store
+from foxtrade.algo_ids import matches
 
 
 def open_for_algo(algo: str) -> list[dict[str, Any]]:
     return [
         t
         for t in trade_store.open_trades()
-        if str(t.get("algo") or "") == str(algo) and t.get("status") == "OPEN"
+        if matches(t.get("algo"), algo) and t.get("status") == "OPEN"
     ]
 
 

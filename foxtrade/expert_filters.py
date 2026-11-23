@@ -606,14 +606,14 @@ def _cfg_capital(cfg: dict[str, Any], *, algo: str | None = None) -> float:
     key = {
         "algo1": "algo1_capital_inr",
         "algo1_sx": "algo1_capital_inr",
-        "algo2": "algo2_capital_inr",
-        "algo2nw": "algo2nw_capital_inr",
+        "algo_cw": "algo_cw_capital_inr",
+        "algo_nw": "algo_nw_capital_inr",
     }.get(algo)
     if not key:
         return base
     raw = cfg.get(key)
-    if raw is None and algo == "algo2nw":
-        raw = cfg.get("algo2_capital_inr")
+    if raw is None and algo == "algo_nw":
+        raw = cfg.get("algo_cw_capital_inr")
     return float(raw if raw is not None else base)
 
 
@@ -624,14 +624,14 @@ def _cfg_deploy(cfg: dict[str, Any], *, algo: str | None = None) -> float:
     key = {
         "algo1": "algo1_deploy_pct",
         "algo1_sx": "algo1_deploy_pct",
-        "algo2": "algo2_deploy_pct",
-        "algo2nw": "algo2nw_deploy_pct",
+        "algo_cw": "algo_cw_deploy_pct",
+        "algo_nw": "algo_nw_deploy_pct",
     }.get(algo)
     if not key:
         return base
     raw = cfg.get(key)
-    if raw is None and algo == "algo2nw":
-        raw = cfg.get("algo2_deploy_pct")
+    if raw is None and algo == "algo_nw":
+        raw = cfg.get("algo_cw_deploy_pct")
     return float(raw if raw is not None else base)
 
 

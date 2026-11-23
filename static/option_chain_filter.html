@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Option chain — Zerodha-style</title>
+  <script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
   <style>
     :root {
       --bg: #0b1017;
@@ -20,13 +21,14 @@
       --atm-row: rgba(240, 180, 41, 0.16);
     }
     * { box-sizing: border-box; }
-    html, body { height: 100%; margin: 0; }
+    html { margin: 0; }
     body {
+      margin: 0;
+      min-height: 100%;
       font-family: "Segoe UI", system-ui, sans-serif;
       background: var(--bg);
       color: var(--text);
-      display: flex;
-      flex-direction: column;
+      /* Full-page document scroll — chain + graph expand naturally */
     }
     header {
       display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center;
@@ -89,7 +91,10 @@
       opacity: 1; background: #1a2a40; border-color: var(--accent);
       color: var(--text);
     }
-    main { flex: 1; overflow: auto; padding: 0 0 24px; }
+    main {
+      overflow: visible;
+      padding: 0 0 8px;
+    }
     table.chain {
       width: 100%; border-collapse: collapse; font-size: 0.8rem;
       font-variant-numeric: tabular-nums;
@@ -132,6 +137,45 @@
     }
     .oi-bar.ce { background: #ef5350; }
     .oi-bar.pe { background: #26a69a; }
+    .chain td.ltp { cursor: pointer; }
+    .chain td.ltp:hover { outline: 1px solid var(--accent); }
+    .chain td.ltp.picked {
+      box-shadow: inset 0 0 0 2px var(--accent);
+      background: #1a2a40;
+    }
+    .hist-panel {
+      border-top: 1px solid var(--line);
+      background: var(--panel);
+      padding: 12px 14px 24px;
+      overflow: visible;
+    }
+    .hist-bar {
+      display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      margin-bottom: 8px; font-size: 0.82rem;
+    }
+    .hist-bar .meta { color: var(--muted); }
+    .hist-chips { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
+    .hist-chip {
+      border: 1px solid var(--line); border-radius: 999px;
+      padding: 3px 10px; font-size: 0.75rem; font-weight: 650;
+      background: #0e1520; cursor: pointer;
+    }
+    .hist-chip.ce { color: #f5a8a4; border-color: rgba(239,83,80,0.45); }
+    .hist-chip.pe { color: #8fd4cb; border-color: rgba(38,166,154,0.45); }
+    .hist-chip:hover { border-color: var(--accent); }
+    #histChart {
+      height: 360px; width: 100%;
+      background: #0f1620; border: 1px solid var(--line); border-radius: 8px;
+    }
+    #histChart.is-empty {
+      height: auto;
+      min-height: 0;
+      border: none;
+      background: transparent;
+    }
+    .hist-empty {
+      color: var(--muted); font-size: 0.8rem; padding: 8px 2px;
+    }
   </style>
 </head>
 <body>
@@ -230,10 +274,44 @@
     </table>
   </main>
 
+  <section class="hist-panel" id="histPanel">
+    <div class="hist-bar">
+      <strong>Strike history</strong>
+      <span class="meta" id="histMeta">Click CE/PE LTP to select (max 6) · locked to this expiry week</span>
+      <div class="hist-chips" id="histChips"></div>
+      <label class="field" style="margin:0">
+        Scope
+        <select id="histScope">
+          <option value="expiry" selected>Full expiry week</option>
+          <option value="day">This day only</option>
+        </select>
+      </label>
+      <label class="field" style="margin:0" title="Parallel channel on each selected strike">
+        Channel
+        <select id="histChannel">
+          <option value="1" selected>On (light yellow)</option>
+          <option value="0">Off</option>
+        </select>
+      </label>
+      <button type="button" class="primary" id="btnHistLoad">Plot</button>
+      <button type="button" id="btnHistClear">Clear</button>
+    </div>
+    <div id="histChart" class="is-empty"><div class="hist-empty" id="histEmpty">Select up to 6 CE/PE LTP cells above, then Plot — chart opens here without hiding the chain.</div></div>
+  </section>
+
   <script>
     const $ = (id) => document.getElementById(id);
     let activeWeek = "current";
     let lastSnap = null;
+    /** @type {Array<{side:string,strike:number,id:string}>} */
+    let histSel = [];
+    const HIST_MAX = 6;
+    const HIST_COLORS = ["#ef5350", "#26a69a", "#3d9cf0", "#f0b429", "#ab47bc", "#ff7043"];
+    let histChart = null;
+    let histSeries = [];
+    let histChannelSeries = [];
+    let histTimer = null;
+    const CHANNEL_COLOR = "rgba(255, 236, 150, 0.9)"; // light yellow
     let liveTimer = null;
     /** Current page of filtered snapshots */
     let timesPage = [];
@@ -559,17 +637,229 @@
           ]
             .filter(Boolean)
             .join(" ");
+          const ceId = `CE:${r.strike}`;
+          const peId = `PE:${r.strike}`;
+          const cePicked = histSel.some((x) => x.id === ceId) ? "picked" : "";
+          const pePicked = histSel.some((x) => x.id === peId) ? "picked" : "";
           return `<tr class="${cls}">
             <td class="ce-cell">${oiBar(ce.oi, maxCeOi, "ce")}${fmtInt(ce.oi)}</td>
             <td class="ce-cell">${fmtInt(ce.volume)}</td>
-            <td class="ce-cell ltp ce-ltp">${fmt(ce.ltp)}</td>
+            <td class="ce-cell ltp ce-ltp ${cePicked}" data-side="CE" data-strike="${r.strike}" title="Toggle CE ${r.strike} on history chart">${fmt(ce.ltp)}</td>
             <td class="strike c">${r.strike}</td>
-            <td class="pe-cell ltp pe-ltp">${fmt(pe.ltp)}</td>
+            <td class="pe-cell ltp pe-ltp ${pePicked}" data-side="PE" data-strike="${r.strike}" title="Toggle PE ${r.strike} on history chart">${fmt(pe.ltp)}</td>
             <td class="pe-cell">${fmtInt(pe.volume)}</td>
             <td class="pe-cell">${oiBar(pe.oi, maxPeOi, "pe")}${fmtInt(pe.oi)}</td>
           </tr>`;
         })
         .join("");
+
+      $("tbody").querySelectorAll("td.ltp[data-side]").forEach((td) => {
+        td.onclick = (e) => {
+          e.stopPropagation();
+          toggleHistLeg(td.dataset.side, Number(td.dataset.strike));
+        };
+      });
+      renderHistChips();
+    }
+
+    function activeExpiry() {
+      if (!lastSnap) return "";
+      return String(
+        activeWeek === "next"
+          ? lastSnap.next_expiry || ""
+          : lastSnap.current_expiry || ""
+      ).slice(0, 10);
+    }
+
+    function renderHistChips() {
+      const box = $("histChips");
+      if (!histSel.length) {
+        box.innerHTML = "";
+        $("histMeta").textContent =
+          `Click CE/PE LTP to select (max ${HIST_MAX}) · expiry ${activeExpiry() || "—"} · ${activeWeek} week only`;
+        return;
+      }
+      box.innerHTML = histSel
+        .map((x, i) => {
+          const color = HIST_COLORS[i % HIST_COLORS.length];
+          return `<button type="button" class="hist-chip ${x.side.toLowerCase()}" data-id="${x.id}" style="border-color:${color}">${x.side} ${x.strike} ✕</button>`;
+        })
+        .join("");
+      box.querySelectorAll(".hist-chip").forEach((btn) => {
+        btn.onclick = () => {
+          histSel = histSel.filter((x) => x.id !== btn.dataset.id);
+          if (lastSnap) renderChain(lastSnap);
+          else renderHistChips();
+          scheduleHistPlot();
+        };
+      });
+      $("histMeta").textContent =
+        `${histSel.length}/${HIST_MAX} · expiry ${activeExpiry() || "—"} · ${activeWeek} week (not other expiries)`;
+    }
+
+    function toggleHistLeg(side, strike) {
+      const id = `${side}:${strike}`;
+      const idx = histSel.findIndex((x) => x.id === id);
+      if (idx >= 0) {
+        histSel.splice(idx, 1);
+      } else {
+        if (histSel.length >= HIST_MAX) {
+          alert(`Max ${HIST_MAX} strikes on the chart. Deselect one first.`);
+          return;
+        }
+        histSel.push({ side, strike, id });
+      }
+      if (lastSnap) renderChain(lastSnap);
+      else renderHistChips();
+      scheduleHistPlot();
+    }
+
+    function destroyHistChart() {
+      histSeries = [];
+      histChannelSeries = [];
+      if (histChart) {
+        try { histChart.remove(); } catch (_) {}
+        histChart = null;
+      }
+      const el = $("histChart");
+      el.classList.add("is-empty");
+      el.innerHTML = `<div class="hist-empty" id="histEmpty">Select up to 6 CE/PE LTP cells above, then Plot — chart opens here without hiding the chain.</div>`;
+    }
+
+    function mapSeriesPts(pts) {
+      return (pts || [])
+        .map((p) => {
+          const t = toChartTime(p.t);
+          if (t == null || p.v == null) return null;
+          return { time: t, value: Number(p.v) };
+        })
+        .filter(Boolean);
+    }
+
+    function addChannelRails(channel, titlePrefix) {
+      if (!histChart || !channel) return;
+      const style = {
+        color: CHANNEL_COLOR,
+        lineWidth: 2,
+        lineStyle: LightweightCharts.LineStyle.Dotted,
+        lastValueVisible: false,
+        priceLineVisible: false,
+        crosshairMarkerVisible: false,
+      };
+      if ((channel.hi || []).length >= 2) {
+        const hi = histChart.addLineSeries({
+          ...style,
+          title: `${titlePrefix} ch hi`,
+        });
+        hi.setData(mapSeriesPts(channel.hi));
+        histChannelSeries.push(hi);
+      }
+      if ((channel.lo || []).length >= 2) {
+        const lo = histChart.addLineSeries({
+          ...style,
+          title: `${titlePrefix} ch lo`,
+        });
+        lo.setData(mapSeriesPts(channel.lo));
+        histChannelSeries.push(lo);
+      }
+    }
+
+    function toChartTime(t) {
+      // "2026-11-18T09:32" or "2026-11-18T09:32:00"
+      const s = String(t || "");
+      const m = s.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+      if (!m) return null;
+      return Math.floor(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) / 1000);
+    }
+
+    async function loadHistChart() {
+      const expiry = activeExpiry();
+      if (!histSel.length) {
+        destroyHistChart();
+        return;
+      }
+      if (!expiry) {
+        $("histMeta").textContent = "No expiry on this snapshot — wait for chain data";
+        return;
+      }
+      const scope = $("histScope").value;
+      const legs = histSel.map((x) => x.id).join(",");
+      const q = new URLSearchParams({
+        week: activeWeek,
+        expiry,
+        legs,
+        scope,
+        resample: "1m",
+      });
+      if (scope === "day") q.set("day", $("day").value);
+      $("histMeta").textContent = "Loading history…";
+      const res = await fetch(`/api/option_chain_db/strike_series?${q}`);
+      const data = await res.json();
+      if (!data.ok) {
+        $("histMeta").textContent = data.error || "history failed";
+        return;
+      }
+      const el = $("histChart");
+      el.classList.remove("is-empty");
+      el.innerHTML = "";
+      if (histChart) {
+        try { histChart.remove(); } catch (_) {}
+        histChart = null;
+      }
+      histChart = LightweightCharts.createChart(el, {
+        layout: { background: { color: "#0f1620" }, textColor: "#8fa0b8" },
+        grid: { vertLines: { color: "#243041" }, horzLines: { color: "#243041" } },
+        rightPriceScale: { borderColor: "#243041" },
+        timeScale: { borderColor: "#243041", timeVisible: true, secondsVisible: false },
+        width: el.clientWidth,
+        height: 360,
+        crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
+      });
+      histSeries = [];
+      histChannelSeries = [];
+      const showChannel = $("histChannel").value !== "0";
+      let channelCount = 0;
+      (data.series || []).forEach((s, i) => {
+        const color = HIST_COLORS[i % HIST_COLORS.length];
+        const line = histChart.addLineSeries({
+          color,
+          lineWidth: 2,
+          title: `${s.side} ${s.strike}`,
+        });
+        line.setData(mapSeriesPts(s.points));
+        histSeries.push(line);
+        if (showChannel && s.channel) {
+          addChannelRails(s.channel, `${s.side}${s.strike}`);
+          channelCount += 1;
+        }
+      });
+      histChart.timeScale().fitContent();
+      new ResizeObserver(() => {
+        if (!histChart) return;
+        histChart.applyOptions({ width: el.clientWidth, height: el.clientHeight || 360 });
+      }).observe(el);
+      // Scroll graph into view after plot
+      requestAnimationFrame(() => {
+        $("histPanel").scrollIntoView({ behavior: "smooth", block: "nearest" });
+      });
+      const days = (data.days || []).join(", ") || "—";
+      $("histMeta").textContent =
+        `Expiry ${data.expiry} · ${activeWeek} · ${(data.series || []).length} series` +
+        (showChannel ? ` · channel ${channelCount}/${(data.series || []).length}` : " · channel off") +
+        ` · days ${days} · 1m bars · dotted light-yellow = channel`;
+    }
+
+    function scheduleHistPlot() {
+      clearTimeout(histTimer);
+      if (!histSel.length) {
+        destroyHistChart();
+        return;
+      }
+      histTimer = setTimeout(() => {
+        loadHistChart().catch((e) => {
+          $("histMeta").textContent = String(e.message || e);
+        });
+      }, 250);
     }
 
     function currentTs() {
@@ -702,10 +992,24 @@
         document.querySelectorAll("#weekTabs button").forEach((b) => {
           b.classList.toggle("active", b === btn);
         });
+        // New week tab → different expiry; clear strike picks
+        histSel = [];
+        destroyHistChart();
         if (lastSnap) renderChain(lastSnap);
         else apply();
       };
     });
+    $("btnHistLoad").onclick = () => loadHistChart().catch((e) => {
+      $("histMeta").textContent = String(e.message || e);
+    });
+    $("btnHistClear").onclick = () => {
+      histSel = [];
+      destroyHistChart();
+      if (lastSnap) renderChain(lastSnap);
+      else renderHistChips();
+    };
+    $("histScope").onchange = () => scheduleHistPlot();
+    $("histChannel").onchange = () => scheduleHistPlot();
     $("btnDash").onclick = () => window.open("/", "_blank", "noopener,noreferrer");
     $("btnCapture").onclick = async () => {
       const s = await (await fetch("/api/option_chain_db")).json();

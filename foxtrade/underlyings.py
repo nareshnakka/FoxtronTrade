@@ -156,7 +156,7 @@ def cfg_for_underlying(base: dict[str, Any], underlying_id: str) -> dict[str, An
         for k in (
             "loose_entry_mode",
             "algo1_enabled",
-            "algo2_enabled",
+            "algo_cw_enabled",
             "directional_min_confidence",
             "directional_min_margin",
             "algo1_min_confidence",
@@ -222,7 +222,7 @@ def cfg_for_underlying(base: dict[str, Any], underlying_id: str) -> dict[str, An
     # Settings toggles always beat FastTrack / Sensex override files.
     for k in (
         "algo1_enabled",
-        "algo2_enabled",
+        "algo_cw_enabled",
         "enable_orb_breakout",
         "enable_orb_breakdown",
         "enable_trend_follow",
