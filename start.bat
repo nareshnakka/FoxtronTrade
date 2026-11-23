@@ -37,6 +37,32 @@ if not defined PY (
 )
 echo   Python: %PY%
 
+if not exist "%ROOT%.env" (
+  echo.
+  echo ERROR: .env missing in %ROOT%
+  echo   Copy .env from your other PC into this folder ^(next to app.py^).
+  echo   .env is never in git — Update.bat will not create it.
+  echo.
+  pause
+  exit /b 1
+)
+
+REM Stuck Logout flag blocks Login until cleared — Start always allows a fresh session.
+if exist "%ROOT%data\manual_logout.flag" (
+  echo Clearing stuck Logout flag so Login can run...
+  del /f /q "%ROOT%data\manual_logout.flag" >nul 2>&1
+)
+
+echo Checking Kite auto-login /.env ...
+"%PY%" "%ROOT%tools_auth_fix.py"
+if errorlevel 1 (
+  echo.
+  echo WARN: auto-login not ready — Login button may open the browser instead.
+  echo   Fix .env keys: KITE_API_KEY, KITE_API_SECRET, KITE_USER_ID, KITE_PASSWORD, KITE_TOTP_SECRET
+  echo.
+
+)
+
 if not exist "%ROOT%data\.migrate_restore_ok" (
   echo Verifying options DB...
   "%PY%" "%ROOT%tools_migrate_restore.py"
